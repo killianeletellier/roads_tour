@@ -1,4 +1,5 @@
 {
+  "references": [{ "path": "../shared" }],
   "compilerOptions": {
     "target": "ES2022",
     "useDefineForClassFields": true,
