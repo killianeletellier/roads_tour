@@ -125,6 +125,12 @@ export const useRouteNavigation = (
     [sortedPoints, visitedPointIds],
   );
 
+  const nextPointLabel = useMemo((): string | null => {
+    if (!nextPoint) return null;
+    const idx = sortedPoints.findIndex(p => p.id === nextPoint.id);
+    return nextPoint.label?.trim() || `POI ${idx + 1}`;
+  }, [nextPoint, sortedPoints]);
+
   const routeGeoJSON = useMemo(() => buildRouteGeoJSON(apiRoute), [apiRoute]);
 
   const routePolyline = useMemo(
@@ -311,6 +317,7 @@ export const useRouteNavigation = (
   return {
     sortedPoints,
     nextPoint,
+    nextPointLabel,
     routeGeoJSON,
     recalcGeoJSON,
     visitedPointIds,

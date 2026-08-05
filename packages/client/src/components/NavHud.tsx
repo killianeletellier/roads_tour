@@ -4,6 +4,7 @@ import { ManeuverIcon } from './Icons';
 interface NavHudProps {
   hasGps: boolean;
   instruction: { type: string; modifier?: string; name: string; distanceM: number } | null;
+  nextPointName: string | null;
   distanceToNextM: number | null;
   estimatedMinutesRemaining: number | null;
   totalRemainingKm: number | null;
@@ -28,6 +29,7 @@ const formatTime = (min: number | null): string => {
 export const NavHud = ({
   hasGps,
   instruction,
+  nextPointName,
   distanceToNextM,
   estimatedMinutesRemaining,
   totalRemainingKm,
@@ -79,7 +81,12 @@ export const NavHud = ({
     <div className="nav-hud__stats">
       <div className="nav-hud__stat">
         <span className="nav-hud__stat-label">Prochain POI</span>
-        <span className="nav-hud__stat-value">{formatDistance(distanceToNextM)}</span>
+        <span className="nav-hud__stat-value">
+          {nextPointName ?? '—'}
+          {distanceToNextM != null && (
+            <span className="nav-hud__stat-sub"> · {formatDistance(distanceToNextM)}</span>
+          )}
+        </span>
       </div>
       <div className="nav-hud__stat-divider" aria-hidden />
       <div className="nav-hud__stat">
