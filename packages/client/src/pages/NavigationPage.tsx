@@ -5,8 +5,10 @@ import type { ConvoyRoute, OffRouteEvent } from '@roads-tour/shared';
 import { getAppConfig } from '../api';
 import { NavHud } from '../components/NavHud';
 import { MapView } from '../components/MapView';
+import { ParticipantSheet } from '../components/ParticipantSheet';
 import { useGeolocation, useThrottledPosition, useVoicePlayback, usePushToTalk } from '../hooks/useGeolocation';
 import { useConvoySocket } from '../hooks/useConvoySocket';
+import { getConnectedParticipants } from '../utils/participants';
 import { MicIcon, UsersIcon, CloseIcon } from '../components/Icons';
 
 interface Session {
@@ -23,6 +25,8 @@ export const NavigationPage = () => {
   const [session, setSession] = useState<Session | null>(null);
   const [osrmUrl, setOsrmUrl] = useState('/api/osrm');
   const [toasts, setToasts] = useState<string[]>([]);
+  const [participantsOpen, setParticipantsOpen] = useState(false);
+  const [focusedMemberId, setFocusedMemberId] = useState<string | null>(null);
 
   useEffect(() => {
     try {
@@ -136,6 +140,27 @@ export const NavigationPage = () => {
     [nav.sortedPoints],
   );
 
+  // Re-evaluate connection threshold as lastSeen ages out
+  const [connectionTick, setConnectionTick] = useState(0);
+  useEffect(() => {
+    if (session?.role !== 'organizer') return;
+    const id = window.setInterval(() => setConnectionTick(t => t + 1), 5000);
+    return () => window.clearInterval(id);
+  }, [session?.role]);
+  const connectedParticipants = useMemo(
+    () => getConnectedParticipants(members),
+    [members, connectionTick],
+  );
+
+  const handleSelectParticipant = useCallback((memberId: string) => {
+    setFocusedMemberId(memberId);
+    setParticipantsOpen(false);
+  }, []);
+
+  const handleFocusClear = useCallback(() => {
+    setFocusedMemberId(null);
+  }, []);
+
   const leave = () => {
     localStorage.removeItem('roads_tour_session');
     navigate('/');
@@ -158,6 +183,8 @@ export const NavigationPage = () => {
           members={members}
           pois={pois}
           bottomPadding={220}
+          focusMemberId={focusedMemberId}
+          onFocusClear={handleFocusClear}
         />
       </div>
 
@@ -174,6 +201,26 @@ export const NavigationPage = () => {
       >
         <CloseIcon />
       </button>
+
+      {isOrganizer && (
+        <button
+          type="button"
+          className="participant-badge"
+          onClick={() => setParticipantsOpen(true)}
+          aria-label={`${connectedParticipants.length} participant${connectedParticipants.length !== 1 ? 's' : ''} connecté${connectedParticipants.length !== 1 ? 's' : ''}`}
+        >
+          <UsersIcon />
+          <span className="participant-badge__count">{connectedParticipants.length}</span>
+        </button>
+      )}
+
+      <ParticipantSheet
+        open={participantsOpen}
+        participants={connectedParticipants}
+        focusedId={focusedMemberId}
+        onClose={() => setParticipantsOpen(false)}
+        onSelect={handleSelectParticipant}
+      />
 
       <div className="nav-page__overlay">
         {isOrganizer && (

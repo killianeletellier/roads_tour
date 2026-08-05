@@ -16,6 +16,8 @@ interface MapViewProps {
   compact?: boolean;
   navigationMode?: boolean;
   bottomPadding?: number;
+  focusMemberId?: string | null;
+  onFocusClear?: () => void;
   className?: string;
 }
 
@@ -84,6 +86,8 @@ export const MapView = ({
   compact = false,
   navigationMode = false,
   bottomPadding = 0,
+  focusMemberId = null,
+  onFocusClear,
   className = '',
 }: MapViewProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -100,6 +104,11 @@ export const MapView = ({
   const [isFollowingUser, setIsFollowingUser] = useState(autoFollow);
   const isFollowingUserRef = useRef(isFollowingUser);
   isFollowingUserRef.current = isFollowingUser;
+  const focusMemberIdRef = useRef(focusMemberId);
+  focusMemberIdRef.current = focusMemberId;
+  const prevFocusMemberIdRef = useRef<string | null>(null);
+  const onFocusClearRef = useRef(onFocusClear);
+  onFocusClearRef.current = onFocusClear;
 
   useEffect(() => {
     if (navigationMode) {
@@ -110,6 +119,7 @@ export const MapView = ({
   const recenterOnUser = useCallback(() => {
     const map = mapRef.current;
     if (!map || !userLocation) return;
+    onFocusClearRef.current?.();
     setIsFollowingUser(true);
     map.easeTo({
       center: userLocation,
@@ -211,6 +221,9 @@ export const MapView = ({
     const onUserMoveStart = (e: maplibregl.MapLibreEvent<MouseEvent | TouchEvent | WheelEvent | undefined>) => {
       if (navigationMode && e.originalEvent) {
         setIsFollowingUser(false);
+        if (focusMemberIdRef.current) {
+          onFocusClearRef.current?.();
+        }
       }
     };
     map.on('dragstart', onUserMoveStart);
@@ -318,7 +331,7 @@ export const MapView = ({
       }
     }
 
-    if (isFollowingUserRef.current && autoFollow) {
+    if (isFollowingUserRef.current && autoFollow && !focusMemberIdRef.current) {
       map.easeTo({
         center: userLocation,
         zoom: navigationMode ? NAV_ZOOM : map.getZoom(),
@@ -327,6 +340,26 @@ export const MapView = ({
       });
     }
   }, [userLocation, userHeading, autoFollow, navigationMode, bottomPadding]);
+
+  useEffect(() => {
+    if (!focusMemberId) {
+      prevFocusMemberIdRef.current = null;
+      return;
+    }
+    const member = members.find(m => m.id === focusMemberId);
+    if (!member || member.lat == null || member.lon == null) return;
+    const map = mapRef.current;
+    if (!map) return;
+    setIsFollowingUser(false);
+    const isNewFocus = prevFocusMemberIdRef.current !== focusMemberId;
+    prevFocusMemberIdRef.current = focusMemberId;
+    map.easeTo({
+      center: [member.lon, member.lat],
+      zoom: NAV_ZOOM,
+      padding: { top: 48, bottom: bottomPadding, left: 24, right: 24 },
+      duration: isNewFocus ? 500 : 300,
+    });
+  }, [focusMemberId, members, bottomPadding]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -389,7 +422,7 @@ export const MapView = ({
         ref={containerRef}
         style={{ width: '100%', height: '100%' }}
       />
-      {navigationMode && !isFollowingUser && userLocation && (
+      {navigationMode && (!isFollowingUser || focusMemberId) && userLocation && (
         <button
           type="button"
           className="map-view__recenter btn-icon no-select"
