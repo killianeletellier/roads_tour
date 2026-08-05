@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { io, type Socket } from 'socket.io-client';
 import type { ConvoyMemberInfo, OffRouteEvent } from '@roads-tour/shared';
 
@@ -82,6 +82,13 @@ export const useConvoySocket = (options: UseConvoySocketOptions | null) => {
 
     socket.on('positions:toggle', (payload: { visible: boolean }) => {
       setPositionsVisible(payload.visible);
+      if (optionsRef.current?.role === 'participant') {
+        if (!payload.visible) {
+          setMembers(prev => prev.filter(m => m.role === 'organizer'));
+        } else {
+          socket.emit('members:request');
+        }
+      }
     });
 
     socket.on('voice:start', (payload: { memberId: string }) => {
@@ -127,8 +134,14 @@ export const useConvoySocket = (options: UseConvoySocketOptions | null) => {
     socketRef.current?.emit('voice:end');
   }, []);
 
+  const visibleMembers = useMemo(() => {
+    if (options?.role === 'organizer') return members;
+    if (positionsVisible) return members;
+    return members.filter(m => m.role === 'organizer');
+  }, [members, positionsVisible, options?.role]);
+
   return {
-    members,
+    members: visibleMembers,
     positionsVisible,
     sendPosition,
     sendOffRoute,

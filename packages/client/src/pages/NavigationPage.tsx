@@ -127,7 +127,12 @@ export const NavigationPage = () => {
   }, []);
 
   const pois = useMemo(
-    () => nav.sortedPoints.map((p, i) => ({ lat: p.latitude, lon: p.longitude, label: p.label, order: i + 1 })),
+    () => nav.sortedPoints.map((p, i) => ({
+      lat: p.latitude,
+      lon: p.longitude,
+      label: p.label?.trim() || `POI ${i + 1}`,
+      order: i + 1,
+    })),
     [nav.sortedPoints],
   );
 
@@ -197,6 +202,7 @@ export const NavigationPage = () => {
         <NavHud
           hasGps={location != null}
           instruction={nav.currentInstruction}
+          nextPointName={nav.nextPointLabel}
           distanceToNextM={nav.distanceToNextM}
           estimatedMinutesRemaining={nav.estimatedMinutesRemaining}
           totalRemainingKm={nav.totalRemainingKm}

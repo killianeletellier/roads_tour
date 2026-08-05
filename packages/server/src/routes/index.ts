@@ -150,6 +150,10 @@ export async function registerAdminRoutes(app: FastifyInstance) {
 
     for (let i = 0; i < allParsed.length; i++) {
       const seg = allParsed[i];
+      const globalPoiIndex = startOrder + i + 1;
+      const poiLabel = /^POI \d+$/.test(seg.poi.label)
+        ? `POI ${globalPoiIndex}`
+        : seg.poi.label;
       await prisma.segment.create({
         data: {
           convoyId: id,
@@ -162,7 +166,7 @@ export async function registerAdminRoutes(app: FastifyInstance) {
             create: {
               lat: seg.poi.lat,
               lon: seg.poi.lon,
-              label: seg.poi.label,
+              label: poiLabel,
             },
           },
         },

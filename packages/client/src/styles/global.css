@@ -306,9 +306,9 @@ input, select {
 }
 
 .map-view__recenter {
-  position: absolute;
+  position: fixed;
   right: calc(0.75rem + env(safe-area-inset-right, 0px));
-  z-index: 5;
+  z-index: 20;
   background: #D14F8B;
   color: white;
   border-color: #D14F8B;
@@ -494,6 +494,13 @@ input, select {
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
+  color: var(--accent);
+}
+
+.nav-page__toolbar .btn-icon.active {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent);
 }
 
 .nav-page__ptt--active {

@@ -36,13 +36,21 @@ export const toConvoyRoute = (convoy: ConvoyWithSegments): ConvoyRoute => {
   const sorted = [...convoy.segments].sort((a, b) => a.order - b.order);
   const points = sorted
     .filter(seg => seg.poi)
-    .map((seg, idx) => ({
-      id: seg.poi!.id,
-      order: idx,
-      latitude: seg.poi!.lat,
-      longitude: seg.poi!.lon,
-      label: seg.poi!.label,
-    }));
+    .map((seg, idx) => {
+      const name = seg.name?.trim();
+      const poiLabel = seg.poi!.label?.trim();
+      let label = name || poiLabel || `POI ${idx + 1}`;
+      if (/^POI \d+$/.test(label)) {
+        label = `POI ${idx + 1}`;
+      }
+      return {
+        id: seg.poi!.id,
+        order: idx,
+        latitude: seg.poi!.lat,
+        longitude: seg.poi!.lon,
+        label,
+      };
+    });
 
   return {
     id: convoy.id,
