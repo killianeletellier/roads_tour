@@ -74,21 +74,30 @@ else
   exit 1
 fi
 
+MIN_PBF_BYTES=102400
+
 echo ""
 echo "==> Vérification / Verification:"
 ls -lh "$OUTPUT"
 echo ""
-echo "En-tête binaire (doit commencer par 0a, pas HTML) / Binary header (expect 0a, not HTML):"
+echo "En-tête binaire (OSMHeader ou protobuf 0x0a@offset 4, pas HTML) / Binary header:"
 hex_dump_first_bytes "$OUTPUT" 20
 
-first_byte="$(pbf_first_byte_hex "$OUTPUT")"
-if [ "$first_byte" != "0a" ]; then
+size="$(wc -c < "$OUTPUT" | tr -d ' ')"
+if [ "$size" -lt "$MIN_PBF_BYTES" ]; then
   echo ""
-  echo "Attention / Warning: en-tête PBF suspect (0x${first_byte}). Le fichier est peut-être corrompu."
+  echo "Erreur / Error: fichier trop petit (${size} octets) — probablement tronqué ou page d'erreur."
+  echo "Relancez avec wget -c ou supprimez le fichier et réessayez."
+  exit 1
+fi
+
+if ! pbf_validate_osm "$OUTPUT"; then
+  echo ""
+  echo "Attention / Warning: ${PBF_VALIDATE_ERR}"
   echo "Relancez avec wget -c ou supprimez le fichier et réessayez."
   exit 1
 fi
 
 echo ""
-echo "==> OK. Prochaine étape / Next step:"
+echo "==> PBF OSM valide (${PBF_VALIDATE_MSG}). Prochaine étape / Next step:"
 echo "    ./docker/osrm/prepare.sh $OUTPUT --prod"

@@ -68,7 +68,7 @@ Comment corriger / How to fix:
   3. Vérifier le fichier avant prepare.sh :
        ls -lh docker/osrm/data/region.osm.pbf
        od -An -tx1 -N20 docker/osrm/data/region.osm.pbf   # ou xxd si installé
-     Attendu : premier octet 0a (protobuf), PAS de texte HTML (<!DOCTYPE, <html).
+     Attendu : chaîne OSMHeader ou octet 0x0a à l'offset 4 (protobuf), PAS HTML (<!DOCTYPE, <html, <?xml).
   4. Relancer :
        ./docker/osrm/prepare.sh docker/osrm/data/region.osm.pbf --prod
 
@@ -98,30 +98,26 @@ validate_osm_pbf() {
   local header
   header="$(head -c 512 "$file" || true)"
 
-  if printf '%s' "$header" | grep -qiE '^[[:space:]]*<!DOCTYPE|^[[:space:]]*<html'; then
-    echo "Erreur / Error: le fichier ressemble à une page HTML, pas à un PBF OSM."
-    echo "Error: file looks like an HTML error page (download failed — 404, redirect, etc.)."
-    echo ""
-    echo "Aperçu du début du fichier / File preview:"
-    head -c 200 "$file" | tr '\n' ' '
-    echo ""
-    print_pbf_fix_instructions "$file"
-    exit 1
-  fi
-
-  local first_byte
-  first_byte="$(pbf_first_byte_hex "$file")"
-  if [ "$first_byte" != "0a" ]; then
-    echo "Erreur / Error: en-tête PBF OSM invalide (premier octet: 0x${first_byte}, attendu: 0x0a)."
-    echo "Error: invalid OSM PBF header (first byte: 0x${first_byte}, expected: 0x0a protobuf BlobHeader)."
-    if command -v file >/dev/null 2>&1; then
-      echo "  file: $(file -b "$file")"
+  if ! pbf_validate_osm "$file"; then
+    if printf '%s' "$header" | grep -qiE '<!DOCTYPE|<html|<\?xml'; then
+      echo "Erreur / Error: le fichier ressemble à une page HTML/XML, pas à un PBF OSM."
+      echo "Error: file looks like an HTML/XML error page (download failed — 404, redirect, etc.)."
+      echo ""
+      echo "Aperçu du début du fichier / File preview:"
+      head -c 200 "$file" | tr '\n' ' '
+      echo ""
+    else
+      echo "Erreur / Error: ${PBF_VALIDATE_ERR}"
+      echo "Error: invalid OSM PBF header."
+      if command -v file >/dev/null 2>&1; then
+        echo "  file: $(file -b "$file")"
+      fi
+      echo ""
+      echo "Causes fréquentes / Common causes:"
+      echo "  - Téléchargement interrompu ou URL incorrecte"
+      echo "  - Fichier XML (.osm) au lieu de binaire (.osm.pbf)"
+      echo "  - Page d'erreur du serveur enregistrée à la place du PBF"
     fi
-    echo ""
-    echo "Causes fréquentes / Common causes:"
-    echo "  - Téléchargement interrompu ou URL incorrecte"
-    echo "  - Fichier XML (.osm) au lieu de binaire (.osm.pbf)"
-    echo "  - Page d'erreur du serveur enregistrée à la place du PBF"
     print_pbf_fix_instructions "$file"
     exit 1
   fi
@@ -130,7 +126,7 @@ validate_osm_pbf() {
     echo "Note: fichier petit ($(numfmt --to=iec-i --suffix=B "$size" 2>/dev/null || echo "${size} B")) — OK pour un petit extract de test (ex. monaco), insuffisant pour Poitou-Charentes ou une grande région."
   fi
 
-  echo "==> Validation PBF OK ($(numfmt --to=iec-i --suffix=B "$size" 2>/dev/null || echo "${size} octets")): $file"
+  echo "==> PBF OSM valide (${PBF_VALIDATE_MSG}) ($(numfmt --to=iec-i --suffix=B "$size" 2>/dev/null || echo "${size} octets")): $file"
 }
 
 validate_osm_pbf "$INPUT"
