@@ -25,6 +25,7 @@ roads-tour/
 │   └── osrm/prepare.sh  # Préparation données OSRM
 ├── scripts/
 │   ├── deploy-prod.sh       # Helper déploiement
+│   ├── cleanup-prod.sh      # Arrêt stack + conteneurs orphelins
 │   └── init-letsencrypt.sh  # Premier certificat SSL
 ├── docker-compose.yml       # Dev (PostgreSQL + OSRM)
 ├── docker-compose.prod.yml  # Production complète
@@ -214,10 +215,30 @@ Corrections courantes :
    ./docker/osrm/prepare.sh docker/osrm/data/region.osm.pbf --prod
    ```
 
+### Conflit de noms Docker (`container name already in use`)
+
+Si un déploiement échoue avec `The container name "/roads-tour-osrm" is already in use`, d’anciens conteneurs (autre projet Compose, création manuelle, deploy interrompu) occupent encore les `container_name` fixes.
+
+**Sur le VPS (immédiat, sans supprimer la base)** :
+
+```bash
+cd /chemin/vers/roads-tour   # répertoire du clone
+docker rm -f roads-tour-osrm roads-tour-app roads-tour-postgres roads-tour-nginx roads-tour-certbot 2>/dev/null || true
+docker compose -f docker-compose.prod.yml --env-file .env.prod down --remove-orphans
+docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build --force-recreate --remove-orphans
+# ou après git pull :
+./scripts/cleanup-prod.sh
+./scripts/deploy-prod.sh
+```
+
+> **Ne pas utiliser `-v`** sur `down` sauf si vous acceptez de **effacer PostgreSQL et les données OSRM**. Pour un reset complet : `./scripts/cleanup-prod.sh --volumes`.
+
+Le script `./scripts/deploy-prod.sh` exécute déjà `down --remove-orphans`, supprime les conteneurs au nom fixe restants, puis `up --force-recreate` (volumes conservés).
+
 ### 3. Premier déploiement
 
 ```bash
-chmod +x scripts/deploy-prod.sh scripts/init-letsencrypt.sh
+chmod +x scripts/deploy-prod.sh scripts/cleanup-prod.sh scripts/init-letsencrypt.sh
 
 # Déployer toute la stack (HTTP tant que pas de certificat)
 docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
@@ -341,6 +362,7 @@ docker compose -f docker-compose.prod.yml down -v
 | `docker/osrm/prepare.sh` | Préparation données routage (validation PBF incluse) |
 | `scripts/download-osm.sh` | Téléchargement extract Geofabrik avec vérification |
 | `scripts/deploy-prod.sh` | Helper déploiement |
+| `scripts/cleanup-prod.sh` | Arrêt stack + conteneurs orphelins (option `--volumes`) |
 | `scripts/init-letsencrypt.sh` | Premier certificat SSL |
 | `.env.prod.example` | Template variables production |
 

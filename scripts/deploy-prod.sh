@@ -11,6 +11,9 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
+# shellcheck source=scripts/lib/prod-docker.sh
+source "$ROOT_DIR/scripts/lib/prod-docker.sh"
+
 COMPOSE="docker compose -f docker-compose.prod.yml --env-file .env.prod"
 
 if [ ! -f .env.prod ]; then
@@ -31,12 +34,21 @@ fi
 
 SERVICE="${1:-}"
 
+UP_FLAGS=(up -d --build --force-recreate --remove-orphans)
+
 if [ -n "$SERVICE" ]; then
+  CONTAINER_NAME="$(prod_container_name_for_service "$SERVICE" || true)"
+  if [ -n "${CONTAINER_NAME:-}" ]; then
+    remove_stale_prod_containers "$CONTAINER_NAME"
+  fi
   echo "==> Building and starting: $SERVICE"
-  $COMPOSE up -d --build "$SERVICE"
+  $COMPOSE "${UP_FLAGS[@]}" "$SERVICE"
 else
+  echo "==> Stopping existing stack (volumes preserved — DB not wiped)"
+  $COMPOSE down --remove-orphans
+  remove_stale_prod_containers
   echo "==> Building and starting full production stack"
-  $COMPOSE up -d --build
+  $COMPOSE "${UP_FLAGS[@]}"
 fi
 
 echo ""
@@ -55,3 +67,5 @@ echo "  ./docker/osrm/prepare.sh docker/osrm/data/region.osm.pbf --prod"
 echo "  docker logs roads-tour-osrm --tail 50"
 echo "  docker volume inspect roads-tour_osrm-data"
 echo "  docker exec roads-tour-app node -e \"fetch('http://osrm:5000/nearest/v1/driving/0,0').then(r=>console.log(r.status)).catch(e=>console.error(e.message))\""
+echo ""
+echo "Container name conflicts: ./scripts/cleanup-prod.sh"
