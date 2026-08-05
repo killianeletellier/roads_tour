@@ -22,6 +22,8 @@ export const useConvoySocket = (options: UseConvoySocketOptions | null) => {
   optionsRef.current = options;
   const viewerRoleRef = useRef(options?.role ?? 'participant');
   viewerRoleRef.current = options?.role ?? 'participant';
+  const positionsVisibleRef = useRef(false);
+  positionsVisibleRef.current = positionsVisible;
 
   useEffect(() => {
     if (!options) return;
@@ -46,13 +48,11 @@ export const useConvoySocket = (options: UseConvoySocketOptions | null) => {
       role?: string;
       organizerRole?: string | null;
       displayName?: string;
-      positionsVisible?: boolean;
     }) => {
       if (payload.memberId === memberId) return;
       const isOrganizerViewer = viewerRoleRef.current === 'organizer';
       const senderIsOrganizer = payload.role === 'organizer';
-      const showParticipant = payload.positionsVisible || senderIsOrganizer;
-      if (!isOrganizerViewer && payload.role !== 'organizer' && !showParticipant) return;
+      if (!isOrganizerViewer && !senderIsOrganizer && !positionsVisibleRef.current) return;
 
       setMembers(prev => {
         const existing = prev.find(m => m.id === payload.memberId);

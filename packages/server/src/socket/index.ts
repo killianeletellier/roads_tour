@@ -18,6 +18,16 @@ const getRoomState = (convoyId: string): ConvoyRoomState => {
   return roomStates.get(convoyId)!;
 };
 
+const shouldReceivePosition = (
+  recipientRole: 'participant' | 'organizer',
+  senderRole: 'participant' | 'organizer',
+  positionsVisible: boolean,
+): boolean => {
+  if (recipientRole === 'organizer') return true;
+  if (senderRole === 'organizer') return true;
+  return positionsVisible;
+};
+
 interface AuthenticatedSocket extends Socket {
   memberId?: string;
   convoyId?: string;
@@ -47,6 +57,9 @@ export const setupSocketIO = (httpServer: HttpServer) => {
     const room = `convoy:${convoyId}`;
     socket.join(room);
 
+    const state = getRoomState(convoyId);
+    socket.emit('positions:toggle', { visible: state.positionsVisible });
+
     socket.on('position:update', async (payload: PositionUpdate) => {
       if (payload.memberId !== memberId) return;
       await prisma.convoyMember.update({
@@ -60,16 +73,25 @@ export const setupSocketIO = (httpServer: HttpServer) => {
         },
       });
 
-      const state = getRoomState(convoyId);
+      const roomState = getRoomState(convoyId);
       const sender = await prisma.convoyMember.findUnique({ where: { id: memberId } });
+      if (!sender) return;
 
-      socket.to(room).emit('position:update', {
+      const updatePayload = {
         ...payload,
-        role: sender?.role,
-        organizerRole: sender?.organizerRole,
-        displayName: sender?.displayName,
-        positionsVisible: state.positionsVisible,
-      });
+        role: sender.role,
+        organizerRole: sender.organizerRole,
+        displayName: sender.displayName,
+      };
+
+      const sockets = await io.in(room).fetchSockets();
+      for (const s of sockets) {
+        const recipient = s as unknown as AuthenticatedSocket;
+        if (recipient.memberId === memberId) continue;
+        if (shouldReceivePosition(recipient.role!, sender.role, roomState.positionsVisible)) {
+          s.emit('position:update', updatePayload);
+        }
+      }
     });
 
     socket.on('member:off-route', async (payload: OffRouteEvent) => {
@@ -121,12 +143,9 @@ export const setupSocketIO = (httpServer: HttpServer) => {
     socket.on('members:request', async () => {
       const members = await prisma.convoyMember.findMany({ where: { convoyId } });
       const state = getRoomState(convoyId);
-      const isOrganizer = socket.role === 'organizer';
       const filtered = members.filter(m => {
         if (m.id === memberId) return false;
-        if (isOrganizer) return true;
-        if (m.role === 'organizer') return true;
-        return state.positionsVisible;
+        return shouldReceivePosition(socket.role!, m.role, state.positionsVisible);
       });
       socket.emit('members:snapshot', filtered.map(toMemberInfo));
     });
