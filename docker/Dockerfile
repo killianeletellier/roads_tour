@@ -10,7 +10,8 @@ COPY packages/shared/package.json ./packages/shared/
 COPY packages/client/package.json ./packages/client/
 COPY packages/server/package.json ./packages/server/
 
-RUN npm ci --ignore-scripts 2>/dev/null || npm install
+# Do not use --ignore-scripts: bcrypt and other native modules must compile on Alpine.
+RUN npm ci || npm install
 
 COPY tsconfig.base.json ./
 COPY packages/shared ./packages/shared
@@ -19,6 +20,7 @@ COPY packages/server ./packages/server
 
 RUN npm run db:generate --workspace=@roads-tour/server
 RUN npm run build
+RUN npm rebuild bcrypt --build-from-source
 RUN npm prune --omit=dev
 
 FROM node:20-alpine AS runtime
@@ -49,7 +51,7 @@ ENV CLIENT_DIST=../../client/dist
 
 EXPOSE 3000
 
-HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
-  CMD node -e "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=5 \
+  CMD node -e "fetch('http://127.0.0.1:3000/api/health').then(r=>{if(!r.ok){console.error('health HTTP',r.status);process.exit(1)}process.exit(0)}).catch(e=>{console.error('health check failed:',e.message);process.exit(1)})"
 
 ENTRYPOINT ["/entrypoint.sh"]

@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import Fastify from 'fastify';
@@ -25,6 +26,9 @@ const buildApp = async () => {
     trustProxy: config.nodeEnv === 'production',
   });
 
+  // Register health early so Docker/nginx probes succeed even if later setup is slow.
+  app.get('/api/health', async () => ({ status: 'ok' }));
+
   await app.register(cors, { origin: true, credentials: true });
   await app.register(cookie);
   await app.register(jwt, { secret: config.jwtSecret, cookie: { cookieName: 'admin_token', signed: false } });
@@ -34,10 +38,13 @@ const buildApp = async () => {
   await registerPublicRoutes(app);
   await registerOsrmProxy(app);
 
-  app.get('/api/health', async () => ({ status: 'ok' }));
-
   if (config.nodeEnv === 'production') {
     const clientPath = path.resolve(__dirname, config.clientDist);
+    if (!fs.existsSync(clientPath)) {
+      throw new Error(
+        `Client build not found at ${clientPath} (CLIENT_DIST=${config.clientDist}). Rebuild the Docker image.`,
+      );
+    }
     await app.register(fastifyStatic, {
       root: clientPath,
       prefix: '/',
@@ -54,13 +61,15 @@ const buildApp = async () => {
 };
 
 const start = async () => {
-  const app = await buildApp();
-  await app.listen({ port: config.port, host: config.host });
-  setupSocketIO(app.server);
-  console.log(`Server listening on ${config.host}:${config.port}`);
+  try {
+    const app = await buildApp();
+    await app.listen({ port: config.port, host: config.host });
+    setupSocketIO(app.server);
+    console.log(`Server listening on ${config.host}:${config.port}`);
+  } catch (err) {
+    console.error('Fatal startup error:', err);
+    process.exit(1);
+  }
 };
 
-start().catch(err => {
-  console.error(err);
-  process.exit(1);
-});
+start();

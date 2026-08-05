@@ -240,6 +240,28 @@ docker compose -f docker-compose.prod.yml exec certbot certbot renew
 docker compose -f docker-compose.prod.yml exec nginx nginx -s reload
 ```
 
+### Dépannage : conteneur `app` unhealthy
+
+Si `dependency failed to start: container roads-tour-app is unhealthy` :
+
+```bash
+docker logs roads-tour-app
+docker compose -f docker-compose.prod.yml ps
+```
+
+Messages fréquents dans les logs :
+
+| Log | Cause | Action |
+|---|---|---|
+| `Set JWT_SECRET in .env.prod` / `Set ADMIN_PASSWORD` | Secrets encore aux valeurs du template | Renseigner des secrets forts dans `.env.prod`, ou temporairement `ALLOW_INSECURE_SECRETS=1` |
+| `PostgreSQL not reachable` | Postgres pas prêt ou `DATABASE_URL` incorrect | `docker logs roads-tour-postgres`, vérifier user/password/db |
+| `Prisma migrate deploy failed` | Schéma DB incompatible ou droits manquants | Vérifier `DATABASE_URL`, logs postgres |
+| `Cannot find module ... bcrypt_lib.node` | Module natif non compilé (image ancienne) | `docker compose ... up -d --build` pour reconstruire l'image |
+| `Client build not found at ...` | Build client absent de l'image | Rebuild complet : `--build --no-cache` |
+| `Fatal startup error` | Crash Node au démarrage | Lire la stack trace complète dans les logs |
+
+Healthcheck interne : `GET http://127.0.0.1:3000/api/health` (délai de grâce 120 s au démarrage).
+
 ### 8. Arrêt
 
 ```bash

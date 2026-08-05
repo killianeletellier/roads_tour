@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
-import bcrypt from 'bcrypt';
 import { z } from 'zod';
+
+const bcrypt = () => import('bcrypt');
 import { parseGpxSegments } from '@roads-tour/shared';
 import { prisma } from '../db.js';
 import { config } from '../config.js';
@@ -61,7 +62,7 @@ export async function registerAdminRoutes(app: FastifyInstance) {
   app.post('/api/admin/convoys', { preHandler: requireAdmin }, async (request, reply) => {
     const body = createConvoySchema.parse(request.body);
     const accessCode = body.accessCode?.toUpperCase() ?? generateAccessCode();
-    const hash = await bcrypt.hash(body.adminPassword, 10);
+    const hash = await (await bcrypt()).hash(body.adminPassword, 10);
     try {
       const convoy = await prisma.convoy.create({
         data: {
@@ -95,7 +96,7 @@ export async function registerAdminRoutes(app: FastifyInstance) {
     if (body.name) data.name = body.name;
     if (body.accessCode) data.accessCode = body.accessCode.toUpperCase();
     if (body.status) data.status = body.status;
-    if (body.adminPassword) data.adminPasswordHash = await bcrypt.hash(body.adminPassword, 10);
+    if (body.adminPassword) data.adminPasswordHash = await (await bcrypt()).hash(body.adminPassword, 10);
     try {
       const convoy = await prisma.convoy.update({
         where: { id },
@@ -294,7 +295,7 @@ export async function registerPublicRoutes(app: FastifyInstance) {
 
     if (body.role === 'organizer') {
       if (!body.adminPassword) return reply.status(401).send({ error: 'Password required' });
-      const valid = await bcrypt.compare(body.adminPassword, convoy.adminPasswordHash);
+      const valid = await (await bcrypt()).compare(body.adminPassword, convoy.adminPasswordHash);
       if (!valid) return reply.status(401).send({ error: 'Invalid password' });
     }
 
