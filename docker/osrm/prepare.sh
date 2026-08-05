@@ -4,13 +4,13 @@
 # Usage:
 #   ./docker/osrm/prepare.sh [path/to/region.osm.pbf] [--prod]
 #
-# Example (Monaco — small, good for testing):
+# Example (Poitou-Charentes — default region for Roads Tour):
 #   mkdir -p docker/osrm/data
-#   ./scripts/download-osm.sh monaco
+#   ./scripts/download-osm.sh poitou-charentes
 #   ./docker/osrm/prepare.sh docker/osrm/data/region.osm.pbf --prod
 #
-# Example (France — large, ~4 GB download + long processing):
-#   ./scripts/download-osm.sh france
+# Example (Monaco — small, good for quick tests):
+#   ./scripts/download-osm.sh monaco
 #   ./docker/osrm/prepare.sh docker/osrm/data/region.osm.pbf --prod
 
 set -euo pipefail
@@ -20,7 +20,7 @@ DATA_DIR="${SCRIPT_DIR}/data"
 INPUT=""
 COPY_TO_PROD=0
 
-# Minimum size for a valid extract (Monaco ~650 KiB; HTML error pages are usually < 50 KiB).
+# Minimum size for a valid extract (Poitou-Charentes ~220 MiB; HTML error pages are usually < 50 KiB).
 MIN_PBF_BYTES=102400
 
 for arg in "$@"; do
@@ -60,8 +60,8 @@ Comment corriger / How to fix:
        mkdir -p docker/osrm/data
        wget -c -O docker/osrm/data/region.osm.pbf URL_GEofabrik
      Ou utiliser le helper :
+       ./scripts/download-osm.sh poitou-charentes
        ./scripts/download-osm.sh monaco
-       ./scripts/download-osm.sh france
   3. Vérifier le fichier avant prepare.sh :
        ls -lh docker/osrm/data/region.osm.pbf
        head -c 20 docker/osrm/data/region.osm.pbf | xxd
@@ -78,7 +78,7 @@ validate_osm_pbf() {
 
   if [ ! -f "$file" ]; then
     echo "Erreur / Error: fichier OSM introuvable / OSM file not found: $file"
-    echo "Téléchargez un extract sur https://download.geofabrik.de/ ou ./scripts/download-osm.sh monaco"
+    echo "Téléchargez un extract sur https://download.geofabrik.de/ ou ./scripts/download-osm.sh poitou-charentes"
     exit 1
   fi
 
@@ -124,7 +124,7 @@ validate_osm_pbf() {
   fi
 
   if [ "$size" -lt 1048576 ]; then
-    echo "Note: fichier petit ($(numfmt --to=iec-i --suffix=B "$size" 2>/dev/null || echo "${size} B")) — OK pour Monaco/test, insuffisant pour une grande région."
+    echo "Note: fichier petit ($(numfmt --to=iec-i --suffix=B "$size" 2>/dev/null || echo "${size} B")) — OK pour un petit extract de test (ex. monaco), insuffisant pour Poitou-Charentes ou une grande région."
   fi
 
   echo "==> Validation PBF OK ($(numfmt --to=iec-i --suffix=B "$size" 2>/dev/null || echo "${size} octets")): $file"

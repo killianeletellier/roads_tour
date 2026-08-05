@@ -60,11 +60,12 @@ npm run db:migrate
 Sans OSRM local, le guidage turn-by-turn ne fonctionnera pas. Pour préparer les données :
 
 ```bash
-# Télécharger un extract OSM (ex. Monaco pour tester)
+# Télécharger un extract OSM (Poitou-Charentes par défaut)
 mkdir -p docker/osrm/data
 chmod +x scripts/download-osm.sh docker/osrm/prepare.sh
-./scripts/download-osm.sh monaco
-# ou : wget -c -O docker/osrm/data/region.osm.pbf https://download.geofabrik.de/europe/monaco-latest.osm.pbf
+./scripts/download-osm.sh
+# ou explicitement : ./scripts/download-osm.sh poitou-charentes
+# ou : wget -c -O docker/osrm/data/region.osm.pbf https://download.geofabrik.de/europe/france/poitou-charentes-latest.osm.pbf
 
 # Vérifier que le PBF est valide (pas une page HTML d'erreur)
 ls -lh docker/osrm/data/region.osm.pbf
@@ -125,7 +126,7 @@ app → osrm:5000     (réseau internal, non exposé)
 - Docker Engine 24+ et Docker Compose v2
 - Nom de domaine avec enregistrement **A** (et **AAAA** si IPv6) pointant vers le serveur
 - Ports **80** et **443** ouverts
-- Espace disque suffisant pour PostgreSQL + extract OSM (ex. Monaco ~1 Mo, France ~4 Go)
+- Espace disque suffisant pour PostgreSQL + extract OSM (Poitou-Charentes ~220 Mo, France ~4 Go)
 
 ### 1. Configuration
 
@@ -153,11 +154,12 @@ OSRM n'est **pas** exposé publiquement ; seul le conteneur `app` y accède.
 mkdir -p docker/osrm/data
 chmod +x scripts/download-osm.sh docker/osrm/prepare.sh
 
-# Exemple test (Monaco, rapide) :
-./scripts/download-osm.sh monaco
+# Poitou-Charentes (région par défaut) :
+./scripts/download-osm.sh
+# ou : ./scripts/download-osm.sh poitou-charentes
 # ou manuellement avec reprise :
 # wget -c -O docker/osrm/data/region.osm.pbf \
-#   https://download.geofabrik.de/europe/monaco-latest.osm.pbf
+#   https://download.geofabrik.de/europe/france/poitou-charentes-latest.osm.pbf
 
 # Vérifier le fichier avant prepare.sh (évite l'erreur « invalid BlobHeader size »)
 ls -lh docker/osrm/data/region.osm.pbf
@@ -166,9 +168,9 @@ head -c 20 docker/osrm/data/region.osm.pbf | xxd   # attendu : 0a… (protobuf),
 ./docker/osrm/prepare.sh docker/osrm/data/region.osm.pbf --prod
 ```
 
-Régions courantes via le helper : `./scripts/download-osm.sh --list` (monaco, france, belgium, …).
+Régions courantes via le helper : `./scripts/download-osm.sh --list` (poitou-charentes, monaco, france, belgium, …).
 
-Pour une région plus large : `./scripts/download-osm.sh france` ou télécharger l'extract sur [Geofabrik](https://download.geofabrik.de/) puis relancer `prepare.sh`.
+Pour une autre région : `./scripts/download-osm.sh monaco` (test rapide) ou `./scripts/download-osm.sh france`, ou télécharger l'extract sur [Geofabrik](https://download.geofabrik.de/) puis relancer `prepare.sh`.
 
 Le volume Docker créé s'appelle **`roads-tour_osrm-data`** (nom du projet Compose + nom du volume). Vérifier :
 
@@ -206,7 +208,7 @@ Corrections courantes :
 4. **PBF corrompu** (`invalid BlobHeader size`) — le fichier `region.osm.pbf` n'est pas un vrai PBF (souvent une page HTML après un `wget` raté). Sur le VPS :
    ```bash
    rm -f docker/osrm/data/region.osm.pbf
-   ./scripts/download-osm.sh monaco   # ou france, etc.
+   ./scripts/download-osm.sh   # poitou-charentes par défaut ; ou monaco, france, etc.
    ls -lh docker/osrm/data/region.osm.pbf
    head -c 20 docker/osrm/data/region.osm.pbf | xxd
    ./docker/osrm/prepare.sh docker/osrm/data/region.osm.pbf --prod

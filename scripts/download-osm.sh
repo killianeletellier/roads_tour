@@ -6,8 +6,9 @@
 #   ./scripts/download-osm.sh --list
 #
 # Examples:
-#   ./scripts/download-osm.sh monaco
-#   ./scripts/download-osm.sh france docker/osrm/data/region.osm.pbf
+#   ./scripts/download-osm.sh                          # default: poitou-charentes
+#   ./scripts/download-osm.sh poitou-charentes
+#   ./scripts/download-osm.sh monaco docker/osrm/data/region.osm.pbf
 
 set -euo pipefail
 
@@ -15,6 +16,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DEFAULT_OUTPUT="${ROOT_DIR}/docker/osrm/data/region.osm.pbf"
 
 declare -A REGIONS=(
+  [poitou-charentes]="https://download.geofabrik.de/europe/france/poitou-charentes-latest.osm.pbf"
   [monaco]="https://download.geofabrik.de/europe/monaco-latest.osm.pbf"
   [france]="https://download.geofabrik.de/europe/france-latest.osm.pbf"
   [belgium]="https://download.geofabrik.de/europe/belgium-latest.osm.pbf"
@@ -42,7 +44,7 @@ if [ "${1:-}" = "--list" ] || [ "${1:-}" = "-h" ] || [ "${1:-}" = "--help" ]; th
   exit 0
 fi
 
-REGION="${1:-monaco}"
+REGION="${1:-poitou-charentes}"
 OUTPUT="${2:-$DEFAULT_OUTPUT}"
 
 if [ -z "${REGIONS[$REGION]+x}" ]; then
