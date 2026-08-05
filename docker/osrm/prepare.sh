@@ -6,11 +6,11 @@
 #
 # Example (Monaco — small, good for testing):
 #   mkdir -p docker/osrm/data
-#   wget -O docker/osrm/data/region.osm.pbf https://download.geofabrik.de/europe/monaco-latest.osm.pbf
+#   ./scripts/download-osm.sh monaco
 #   ./docker/osrm/prepare.sh docker/osrm/data/region.osm.pbf --prod
 #
 # Example (France — large, ~4 GB download + long processing):
-#   wget -O docker/osrm/data/region.osm.pbf https://download.geofabrik.de/europe/france-latest.osm.pbf
+#   ./scripts/download-osm.sh france
 #   ./docker/osrm/prepare.sh docker/osrm/data/region.osm.pbf --prod
 
 set -euo pipefail
@@ -19,6 +19,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DATA_DIR="${SCRIPT_DIR}/data"
 INPUT=""
 COPY_TO_PROD=0
+
+# Minimum size for a valid extract (Monaco ~650 KiB; HTML error pages are usually < 50 KiB).
+MIN_PBF_BYTES=102400
 
 for arg in "$@"; do
   case "$arg" in
@@ -37,11 +40,97 @@ COMPOSE_NAME="$(grep -E '^name:' "${ROOT_DIR}/${COMPOSE_FILE}" 2>/dev/null | awk
 PROJECT_NAME="${COMPOSE_PROJECT_NAME:-${COMPOSE_NAME:-roads-tour}}"
 VOLUME_NAME="${OSRM_VOLUME:-${PROJECT_NAME}_osrm-data}"
 
-if [ ! -f "$INPUT" ]; then
-  echo "Error: OSM file not found: $INPUT"
-  echo "Download an extract from https://download.geofabrik.de/ and retry."
-  exit 1
-fi
+file_size_bytes() {
+  local f="$1"
+  if stat -f%z "$f" >/dev/null 2>&1; then
+    stat -f%z "$f"
+  else
+    stat -c%s "$f"
+  fi
+}
+
+print_pbf_fix_instructions() {
+  local file="$1"
+  cat <<EOF
+
+Comment corriger / How to fix:
+  1. Supprimer le fichier corrompu :
+       rm -f "$file"
+  2. Re-télécharger avec reprise (wget -c) :
+       mkdir -p docker/osrm/data
+       wget -c -O docker/osrm/data/region.osm.pbf URL_GEofabrik
+     Ou utiliser le helper :
+       ./scripts/download-osm.sh monaco
+       ./scripts/download-osm.sh france
+  3. Vérifier le fichier avant prepare.sh :
+       ls -lh docker/osrm/data/region.osm.pbf
+       head -c 20 docker/osrm/data/region.osm.pbf | xxd
+     Attendu : premier octet 0a (protobuf), PAS de texte HTML (<!DOCTYPE, <html).
+  4. Relancer :
+       ./docker/osrm/prepare.sh docker/osrm/data/region.osm.pbf --prod
+
+Extracts Geofabrik : https://download.geofabrik.de/
+EOF
+}
+
+validate_osm_pbf() {
+  local file="$1"
+
+  if [ ! -f "$file" ]; then
+    echo "Erreur / Error: fichier OSM introuvable / OSM file not found: $file"
+    echo "Téléchargez un extract sur https://download.geofabrik.de/ ou ./scripts/download-osm.sh monaco"
+    exit 1
+  fi
+
+  local size
+  size="$(file_size_bytes "$file")"
+
+  if [ "$size" -lt "$MIN_PBF_BYTES" ]; then
+    echo "Erreur / Error: fichier trop petit (${size} octets) — probablement vide ou tronqué."
+    echo "Error: file too small (${size} bytes) — likely empty or truncated download."
+    print_pbf_fix_instructions "$file"
+    exit 1
+  fi
+
+  local header
+  header="$(head -c 512 "$file" || true)"
+
+  if printf '%s' "$header" | grep -qiE '^[[:space:]]*<!DOCTYPE|^[[:space:]]*<html'; then
+    echo "Erreur / Error: le fichier ressemble à une page HTML, pas à un PBF OSM."
+    echo "Error: file looks like an HTML error page (download failed — 404, redirect, etc.)."
+    echo ""
+    echo "Aperçu du début du fichier / File preview:"
+    head -c 200 "$file" | tr '\n' ' '
+    echo ""
+    print_pbf_fix_instructions "$file"
+    exit 1
+  fi
+
+  local first_byte
+  first_byte="$(head -c 1 "$file" | od -An -tx1 | tr -d ' \n')"
+  if [ "$first_byte" != "0a" ]; then
+    echo "Erreur / Error: en-tête PBF OSM invalide (premier octet: 0x${first_byte}, attendu: 0x0a)."
+    echo "Error: invalid OSM PBF header (first byte: 0x${first_byte}, expected: 0x0a protobuf BlobHeader)."
+    if command -v file >/dev/null 2>&1; then
+      echo "  file: $(file -b "$file")"
+    fi
+    echo ""
+    echo "Causes fréquentes / Common causes:"
+    echo "  - Téléchargement interrompu ou URL incorrecte"
+    echo "  - Fichier XML (.osm) au lieu de binaire (.osm.pbf)"
+    echo "  - Page d'erreur du serveur enregistrée à la place du PBF"
+    print_pbf_fix_instructions "$file"
+    exit 1
+  fi
+
+  if [ "$size" -lt 1048576 ]; then
+    echo "Note: fichier petit ($(numfmt --to=iec-i --suffix=B "$size" 2>/dev/null || echo "${size} B")) — OK pour Monaco/test, insuffisant pour une grande région."
+  fi
+
+  echo "==> Validation PBF OK ($(numfmt --to=iec-i --suffix=B "$size" 2>/dev/null || echo "${size} octets")): $file"
+}
+
+validate_osm_pbf "$INPUT"
 
 mkdir -p "$DATA_DIR"
 

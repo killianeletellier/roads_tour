@@ -60,10 +60,16 @@ npm run db:migrate
 Sans OSRM local, le guidage turn-by-turn ne fonctionnera pas. Pour préparer les données :
 
 ```bash
-# Télécharger un extract OSM (ex. région)
+# Télécharger un extract OSM (ex. Monaco pour tester)
 mkdir -p docker/osrm/data
-wget -O docker/osrm/data/region.osm.pbf https://download.geofabrik.de/europe/monaco-latest.osm.pbf
-chmod +x docker/osrm/prepare.sh
+chmod +x scripts/download-osm.sh docker/osrm/prepare.sh
+./scripts/download-osm.sh monaco
+# ou : wget -c -O docker/osrm/data/region.osm.pbf https://download.geofabrik.de/europe/monaco-latest.osm.pbf
+
+# Vérifier que le PBF est valide (pas une page HTML d'erreur)
+ls -lh docker/osrm/data/region.osm.pbf
+head -c 20 docker/osrm/data/region.osm.pbf | xxd   # premier octet = 0a, pas <!DOCTYPE
+
 ./docker/osrm/prepare.sh docker/osrm/data/region.osm.pbf
 docker compose --profile osrm up osrm -d
 ```
@@ -145,16 +151,24 @@ OSRM n'est **pas** exposé publiquement ; seul le conteneur `app` y accède.
 
 ```bash
 mkdir -p docker/osrm/data
+chmod +x scripts/download-osm.sh docker/osrm/prepare.sh
 
 # Exemple test (Monaco, rapide) :
-wget -O docker/osrm/data/region.osm.pbf \
-  https://download.geofabrik.de/europe/monaco-latest.osm.pbf
+./scripts/download-osm.sh monaco
+# ou manuellement avec reprise :
+# wget -c -O docker/osrm/data/region.osm.pbf \
+#   https://download.geofabrik.de/europe/monaco-latest.osm.pbf
 
-chmod +x docker/osrm/prepare.sh
+# Vérifier le fichier avant prepare.sh (évite l'erreur « invalid BlobHeader size »)
+ls -lh docker/osrm/data/region.osm.pbf
+head -c 20 docker/osrm/data/region.osm.pbf | xxd   # attendu : 0a… (protobuf), PAS HTML
+
 ./docker/osrm/prepare.sh docker/osrm/data/region.osm.pbf --prod
 ```
 
-Pour une région plus large, télécharger l'extract correspondant sur [Geofabrik](https://download.geofabrik.de/) puis relancer la commande ci-dessus.
+Régions courantes via le helper : `./scripts/download-osm.sh --list` (monaco, france, belgium, …).
+
+Pour une région plus large : `./scripts/download-osm.sh france` ou télécharger l'extract sur [Geofabrik](https://download.geofabrik.de/) puis relancer `prepare.sh`.
 
 Le volume Docker créé s'appelle **`roads-tour_osrm-data`** (nom du projet Compose + nom du volume). Vérifier :
 
@@ -189,6 +203,14 @@ Corrections courantes :
 1. **Données manquantes** — exécuter `./docker/osrm/prepare.sh … --prod` puis `docker compose … up -d osrm`
 2. **Volume incorrect** — le projet Compose doit s'appeler `roads-tour` (`name:` dans `docker-compose.prod.yml`)
 3. **OSRM pas prêt** — l'app attend `service_healthy` ; attendre la fin du healthcheck OSRM (~60 s au premier démarrage)
+4. **PBF corrompu** (`invalid BlobHeader size`) — le fichier `region.osm.pbf` n'est pas un vrai PBF (souvent une page HTML après un `wget` raté). Sur le VPS :
+   ```bash
+   rm -f docker/osrm/data/region.osm.pbf
+   ./scripts/download-osm.sh monaco   # ou france, etc.
+   ls -lh docker/osrm/data/region.osm.pbf
+   head -c 20 docker/osrm/data/region.osm.pbf | xxd
+   ./docker/osrm/prepare.sh docker/osrm/data/region.osm.pbf --prod
+   ```
 
 ### 3. Premier déploiement
 
@@ -314,7 +336,8 @@ docker compose -f docker-compose.prod.yml down -v
 | `docker/Dockerfile` | Build multi-stage (shared + client + server) |
 | `docker/entrypoint.sh` | Attente Postgres, migrations, démarrage |
 | `docker/nginx/` | Reverse proxy HTTPS + WebSocket |
-| `docker/osrm/prepare.sh` | Préparation données routage |
+| `docker/osrm/prepare.sh` | Préparation données routage (validation PBF incluse) |
+| `scripts/download-osm.sh` | Téléchargement extract Geofabrik avec vérification |
 | `scripts/deploy-prod.sh` | Helper déploiement |
 | `scripts/init-letsencrypt.sh` | Premier certificat SSL |
 | `.env.prod.example` | Template variables production |
