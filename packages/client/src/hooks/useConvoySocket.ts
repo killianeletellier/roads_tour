@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { io, type Socket } from 'socket.io-client';
 import type { ConvoyMemberInfo, OffRouteEvent } from '@roads-tour/shared';
+import { isConnectedMember } from '../utils/participants';
 
 interface UseConvoySocketOptions {
   token: string;
@@ -15,6 +16,7 @@ interface UseConvoySocketOptions {
 export const useConvoySocket = (options: UseConvoySocketOptions | null) => {
   const [members, setMembers] = useState<ConvoyMemberInfo[]>([]);
   const [positionsVisible, setPositionsVisible] = useState(false);
+  const [connectionTick, setConnectionTick] = useState(0);
   const socketRef = useRef<Socket | null>(null);
   const optionsRef = useRef(options);
   optionsRef.current = options;
@@ -109,6 +111,12 @@ export const useConvoySocket = (options: UseConvoySocketOptions | null) => {
     };
   }, [options?.token, options?.memberId]);
 
+  useEffect(() => {
+    if (!options) return;
+    const id = window.setInterval(() => setConnectionTick(t => t + 1), 5000);
+    return () => window.clearInterval(id);
+  }, [options?.token]);
+
   const sendPosition = useCallback((memberId: string, lat: number, lon: number, heading: number | null, speed: number | null) => {
     socketRef.current?.emit('position:update', { memberId, lat, lon, heading, speed });
   }, []);
@@ -135,10 +143,12 @@ export const useConvoySocket = (options: UseConvoySocketOptions | null) => {
   }, []);
 
   const visibleMembers = useMemo(() => {
-    if (options?.role === 'organizer') return members;
-    if (positionsVisible) return members;
-    return members.filter(m => m.role === 'organizer');
-  }, [members, positionsVisible, options?.role]);
+    let filtered = members;
+    if (options?.role !== 'organizer') {
+      filtered = positionsVisible ? members : members.filter(m => m.role === 'organizer');
+    }
+    return filtered.filter(isConnectedMember);
+  }, [members, positionsVisible, options?.role, connectionTick]);
 
   return {
     members: visibleMembers,

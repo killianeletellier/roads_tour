@@ -140,17 +140,16 @@ export const NavigationPage = () => {
     [nav.sortedPoints],
   );
 
-  // Re-evaluate connection threshold as lastSeen ages out
-  const [connectionTick, setConnectionTick] = useState(0);
-  useEffect(() => {
-    if (session?.role !== 'organizer') return;
-    const id = window.setInterval(() => setConnectionTick(t => t + 1), 5000);
-    return () => window.clearInterval(id);
-  }, [session?.role]);
   const connectedParticipants = useMemo(
     () => getConnectedParticipants(members),
-    [members, connectionTick],
+    [members],
   );
+
+  useEffect(() => {
+    if (focusedMemberId && !members.some(m => m.id === focusedMemberId)) {
+      setFocusedMemberId(null);
+    }
+  }, [focusedMemberId, members]);
 
   const handleSelectParticipant = useCallback((memberId: string) => {
     setFocusedMemberId(memberId);
