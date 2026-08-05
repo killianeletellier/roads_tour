@@ -289,6 +289,73 @@ docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
 
 Les migrations Prisma s'exécutent automatiquement au démarrage du conteneur `app`.
 
+### Purge / reset PostgreSQL (production)
+
+Contexte : avant la fonctionnalité d’anonymisation à la déconnexion (commit `eb12702`), les pseudos restaient occupés en base après départ des participants (`@@unique([convoyId, displayName])`). Pour repartir proprement ou libérer les pseudos sans tout effacer :
+
+**Prérequis VPS** — depuis le clone du projet (`.env.prod` présent) :
+
+```bash
+cd /chemin/vers/roads-tour
+COMPOSE="docker compose -f docker-compose.prod.yml --env-file .env.prod"
+# Utilisateur / base par défaut (.env.prod.example) : roadstour / roadstour
+# Adapter -U et -d si votre .env.prod diffère.
+```
+
+#### Option A — Reset complet (convois, tracés, membres)
+
+Efface **PostgreSQL et le volume OSRM** (`pgdata`, `osrm-data`). Les certificats Let’s Encrypt (`certbot-*`) sont conservés.
+
+```bash
+./scripts/cleanup-prod.sh --volumes
+git pull   # recommandé : image app à jour (dont anonymisation à la déconnexion)
+./scripts/deploy-prod.sh
+```
+
+> **Attention** : `--volumes` / `docker compose down -v` **détruit définitivement** les données PostgreSQL et OSRM. Ne pas utiliser sans backup si vous avez besoin de conserver quoi que ce soit.
+
+Variante **base seule** (garder le graphe OSRM déjà préparé) — stack arrêtée ou au minimum Postgres accessible :
+
+```bash
+docker exec -i roads-tour-postgres psql -U roadstour -d roadstour -v ON_ERROR_STOP=1 <<'SQL'
+TRUNCATE TABLE "Convoy" CASCADE;
+SQL
+docker compose -f docker-compose.prod.yml --env-file .env.prod restart app
+```
+
+Après un reset complet : **recréer les convois** dans l’admin (`https://${DOMAIN}/admin`), reconfigurer tracés et codes d’accès.
+
+#### Option B — Partiel (conserver convois / segments)
+
+**B1 — Vider tous les membres** (libère tous les pseudos, supprime positions GPS) :
+
+```bash
+docker exec -i roads-tour-postgres psql -U roadstour -d roadstour -v ON_ERROR_STOP=1 <<'SQL'
+DELETE FROM "ConvoyMember";
+SQL
+```
+
+**B2 — Anonymiser les pseudos « réels » restants** (lignes créées avant déconnexion auto ; préfixe `_offline_` comme en prod) :
+
+```bash
+docker exec -i roads-tour-postgres psql -U roadstour -d roadstour -v ON_ERROR_STOP=1 <<'SQL'
+UPDATE "ConvoyMember"
+SET
+  "displayName" = '_offline_' || substr(replace(gen_random_uuid()::text, '-', ''), 1, 8),
+  lat = NULL,
+  lon = NULL,
+  heading = NULL,
+  speed = NULL,
+  "isOffRoute" = false,
+  "lastSeen" = NULL
+WHERE NOT starts_with("displayName", '_offline_');
+SQL
+```
+
+Les participants encore connectés peuvent garder un pseudo visible côté client jusqu’à reconnexion ; préférer B1 avant un événement si vous voulez une liste vide.
+
+Volumes Compose (projet **`roads-tour`**, voir `name:` dans `docker-compose.prod.yml`) : `roads-tour_pgdata`, `roads-tour_osrm-data`, `roads-tour_certbot-www`, `roads-tour_certbot-certs`.
+
 ### 6. Sauvegarde PostgreSQL
 
 ```bash
