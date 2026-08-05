@@ -11,8 +11,42 @@ server {
     root /var/www/certbot;
   }
 
+  # Always proxy API/WebSocket on HTTP — Cloudflare terminates TLS and forwards
+  # here with X-Forwarded-Proto: https; a blanket redirect would 301-loop /api/*.
+  location /socket.io/ {
+    proxy_pass http://app;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection $connection_upgrade;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_read_timeout 86400;
+    proxy_send_timeout 86400;
+    proxy_buffering off;
+  }
+
+  location /api/ {
+    proxy_pass http://app;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+  }
+
   location / {
-    return 301 https://$host$request_uri;
+    if ($redirect_to_https) {
+      return 301 https://$host$request_uri;
+    }
+
+    proxy_pass http://app;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
   }
 }
 
