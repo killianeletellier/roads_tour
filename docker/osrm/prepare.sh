@@ -16,6 +16,9 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=../../scripts/lib/hex-dump.sh
+source "${SCRIPT_DIR}/../../scripts/lib/hex-dump.sh"
+
 DATA_DIR="${SCRIPT_DIR}/data"
 INPUT=""
 COPY_TO_PROD=0
@@ -64,7 +67,7 @@ Comment corriger / How to fix:
        ./scripts/download-osm.sh monaco
   3. Vérifier le fichier avant prepare.sh :
        ls -lh docker/osrm/data/region.osm.pbf
-       head -c 20 docker/osrm/data/region.osm.pbf | xxd
+       od -An -tx1 -N20 docker/osrm/data/region.osm.pbf   # ou xxd si installé
      Attendu : premier octet 0a (protobuf), PAS de texte HTML (<!DOCTYPE, <html).
   4. Relancer :
        ./docker/osrm/prepare.sh docker/osrm/data/region.osm.pbf --prod
@@ -107,7 +110,7 @@ validate_osm_pbf() {
   fi
 
   local first_byte
-  first_byte="$(head -c 1 "$file" | od -An -tx1 | tr -d ' \n')"
+  first_byte="$(pbf_first_byte_hex "$file")"
   if [ "$first_byte" != "0a" ]; then
     echo "Erreur / Error: en-tête PBF OSM invalide (premier octet: 0x${first_byte}, attendu: 0x0a)."
     echo "Error: invalid OSM PBF header (first byte: 0x${first_byte}, expected: 0x0a protobuf BlobHeader)."

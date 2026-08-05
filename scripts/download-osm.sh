@@ -57,6 +57,9 @@ fi
 URL="${REGIONS[$REGION]}"
 mkdir -p "$(dirname "$OUTPUT")"
 
+# shellcheck source=scripts/lib/hex-dump.sh
+source "${ROOT_DIR}/scripts/lib/hex-dump.sh"
+
 echo "==> Téléchargement / Download: $REGION"
 echo "    URL    : $URL"
 echo "    Output : $OUTPUT"
@@ -76,9 +79,9 @@ echo "==> Vérification / Verification:"
 ls -lh "$OUTPUT"
 echo ""
 echo "En-tête binaire (doit commencer par 0a, pas HTML) / Binary header (expect 0a, not HTML):"
-head -c 20 "$OUTPUT" | xxd
+hex_dump_first_bytes "$OUTPUT" 20
 
-first_byte="$(head -c 1 "$OUTPUT" | od -An -tx1 | tr -d ' \n')"
+first_byte="$(pbf_first_byte_hex "$OUTPUT")"
 if [ "$first_byte" != "0a" ]; then
   echo ""
   echo "Attention / Warning: en-tête PBF suspect (0x${first_byte}). Le fichier est peut-être corrompu."
