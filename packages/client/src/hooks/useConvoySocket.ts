@@ -36,7 +36,11 @@ export const useConvoySocket = (options: UseConvoySocketOptions | null) => {
     });
 
     socket.on('members:snapshot', (snapshot: ConvoyMemberInfo[]) => {
-      setMembers(snapshot);
+      setMembers(snapshot.filter(isConnectedMember));
+    });
+
+    socket.on('member:offline', (payload: { memberId: string }) => {
+      setMembers(prev => prev.filter(m => m.id !== payload.memberId));
     });
 
     socket.on('position:update', (payload: {

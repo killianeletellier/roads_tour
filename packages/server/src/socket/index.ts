@@ -1,6 +1,7 @@
 import type { Server as HttpServer } from 'node:http';
 import { Server, type Socket } from 'socket.io';
 import type { PositionUpdate, OffRouteEvent } from '@roads-tour/shared';
+import { CONNECTED_THRESHOLD_MS } from '@roads-tour/shared';
 import { prisma } from '../db.js';
 import { toMemberInfo } from '../services/convoy.js';
 
@@ -27,6 +28,23 @@ const shouldReceivePosition = (
   if (senderRole === 'organizer') return true;
   return positionsVisible;
 };
+
+const isRecentlySeen = (lastSeen: Date | null): boolean => {
+  if (!lastSeen) return false;
+  return Date.now() - lastSeen.getTime() < CONNECTED_THRESHOLD_MS;
+};
+
+const clearMemberPosition = (memberId: string) =>
+  prisma.convoyMember.update({
+    where: { id: memberId },
+    data: {
+      lat: null,
+      lon: null,
+      heading: null,
+      speed: null,
+      isOffRoute: false,
+    },
+  });
 
 interface AuthenticatedSocket extends Socket {
   memberId?: string;
@@ -56,6 +74,13 @@ export const setupSocketIO = (httpServer: HttpServer) => {
     const memberId = socket.memberId!;
     const room = `convoy:${convoyId}`;
     socket.join(room);
+
+    void clearMemberPosition(memberId).then(() => {
+      prisma.convoyMember.update({
+        where: { id: memberId },
+        data: { lastSeen: new Date() },
+      }).catch(() => {});
+    });
 
     const state = getRoomState(convoyId);
     socket.emit('positions:toggle', { visible: state.positionsVisible });
@@ -142,10 +167,20 @@ export const setupSocketIO = (httpServer: HttpServer) => {
     });
 
     socket.on('members:request', async () => {
+      const sockets = await io.in(room).fetchSockets();
+      const onlineIds = new Set(
+        sockets
+          .map(s => (s as unknown as AuthenticatedSocket).memberId)
+          .filter((id): id is string => !!id),
+      );
+
       const members = await prisma.convoyMember.findMany({ where: { convoyId } });
       const state = getRoomState(convoyId);
       const filtered = members.filter(m => {
         if (m.id === memberId) return false;
+        if (!onlineIds.has(m.id)) return false;
+        if (!isRecentlySeen(m.lastSeen)) return false;
+        if (m.lat == null || m.lon == null) return false;
         return shouldReceivePosition(socket.role!, m.role, state.positionsVisible);
       });
       socket.emit('members:snapshot', filtered.map(toMemberInfo));
@@ -157,6 +192,8 @@ export const setupSocketIO = (httpServer: HttpServer) => {
         state.voiceActiveMemberId = null;
         socket.to(room).emit('voice:end', { memberId });
       }
+      await clearMemberPosition(memberId);
+      socket.to(room).emit('member:offline', { memberId });
     });
   });
 

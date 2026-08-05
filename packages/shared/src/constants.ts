@@ -8,6 +8,8 @@ export const RECALC_COOLDOWN_MS = 30_000;
 export const STEP_PASSED_THRESHOLD_M = 30;
 export const DEFAULT_SPEED_KMH = 50;
 export const POSITION_UPDATE_INTERVAL_MS = 1000;
+/** Consider a member connected if seen within this window (3× position interval). */
+export const CONNECTED_THRESHOLD_MS = 30_000;
 
 export const CONVOY_CODE_MIN = 6;
 export const CONVOY_CODE_MAX = 8;

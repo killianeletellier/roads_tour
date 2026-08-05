@@ -1,7 +1,7 @@
 import type { ConvoyMemberInfo } from '@roads-tour/shared';
+import { CONNECTED_THRESHOLD_MS } from '@roads-tour/shared';
 
-/** Consider a member connected if seen within this window (3× position interval). */
-export const CONNECTED_THRESHOLD_MS = 30_000;
+export { CONNECTED_THRESHOLD_MS };
 
 export const isConnectedMember = (m: ConvoyMemberInfo): boolean => {
   if (!m.lastSeen) return false;
