@@ -54,75 +54,210 @@ const detectAudioMimeType = (bytes: Uint8Array): string => {
   return 'audio/webm';
 };
 
+const getMediaSourceMimeType = (detected: string): string | null => {
+  const candidates =
+    detected === 'audio/mp4'
+      ? ['audio/mp4; codecs="mp4a.40.2"', 'audio/mp4; codecs="aac"', 'audio/mp4']
+      : detected === 'audio/ogg'
+        ? ['audio/ogg; codecs="opus"', 'audio/ogg']
+        : ['audio/webm; codecs="opus"', 'audio/webm'];
+  return candidates.find(type => MediaSource.isTypeSupported(type)) ?? null;
+};
+
+const SILENT_WAV =
+  'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAA==';
+
 export const useVoicePlayback = () => {
-  const audioContextRef = useRef<AudioContext | null>(null);
   const chunksRef = useRef<Uint8Array[]>([]);
   const mimeTypeRef = useRef('audio/webm');
-  const playedDurationRef = useRef(0);
-  const nextPlayTimeRef = useRef(0);
-  const decodingRef = useRef(false);
+  const mediaSourceRef = useRef<MediaSource | null>(null);
+  const sourceBufferRef = useRef<SourceBuffer | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const pendingRef = useRef<Uint8Array[]>([]);
+  const objectUrlRef = useRef<string | null>(null);
+  const streamingRef = useRef(false);
+  const unlockedRef = useRef(false);
+  const playedRef = useRef(false);
 
-  const getAudioContext = useCallback(() => {
-    if (!audioContextRef.current) {
-      audioContextRef.current = new AudioContext();
-    }
-    if (audioContextRef.current.state === 'suspended') {
-      void audioContextRef.current.resume();
-    }
-    return audioContextRef.current;
-  }, []);
-
-  const tryDecodeAndPlay = useCallback(async () => {
-    if (decodingRef.current || chunksRef.current.length === 0) return;
-    decodingRef.current = true;
-    const chunkCountAtStart = chunksRef.current.length;
-    try {
-      const ctx = getAudioContext();
-      const blob = new Blob(chunksRef.current as BlobPart[], { type: mimeTypeRef.current });
-      const audioBuffer = await ctx.decodeAudioData(await blob.arrayBuffer());
-      const totalDuration = audioBuffer.duration;
-      const offset = playedDurationRef.current;
-      if (totalDuration <= offset + 0.02) return;
-
-      const source = ctx.createBufferSource();
-      source.buffer = audioBuffer;
-      const startAt = Math.max(ctx.currentTime + 0.02, nextPlayTimeRef.current);
-      const segmentDuration = totalDuration - offset;
-      source.start(startAt, offset, segmentDuration);
-      nextPlayTimeRef.current = startAt + segmentDuration;
-      playedDurationRef.current = totalDuration;
-    } catch {
-      /* Incomplete container — wait for more chunks */
-    } finally {
-      decodingRef.current = false;
-      if (chunksRef.current.length > chunkCountAtStart) {
-        void tryDecodeAndPlay();
+  const cleanupMediaSource = useCallback(() => {
+    sourceBufferRef.current = null;
+    if (mediaSourceRef.current && mediaSourceRef.current.readyState === 'open') {
+      try {
+        mediaSourceRef.current.endOfStream();
+      } catch (err) {
+        console.warn('[voice] endOfStream failed:', err);
       }
     }
-  }, [getAudioContext]);
+    mediaSourceRef.current = null;
+    if (objectUrlRef.current) {
+      URL.revokeObjectURL(objectUrlRef.current);
+      objectUrlRef.current = null;
+    }
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.removeAttribute('src');
+      audioRef.current.load();
+      audioRef.current = null;
+    }
+    pendingRef.current = [];
+    streamingRef.current = false;
+  }, []);
+
+  const playAudio = useCallback(async (audio: HTMLAudioElement) => {
+    try {
+      await audio.play();
+      playedRef.current = true;
+    } catch (err) {
+      console.warn('[voice] audio.play() blocked — tap the screen to enable playback:', err);
+    }
+  }, []);
+
+  const unlockAudio = useCallback(async () => {
+    if (unlockedRef.current) {
+      if (audioRef.current?.paused) void playAudio(audioRef.current);
+      return;
+    }
+    unlockedRef.current = true;
+    try {
+      const probe = new Audio(SILENT_WAV);
+      probe.volume = 0.001;
+      await probe.play();
+      probe.pause();
+    } catch (err) {
+      console.warn('[voice] unlockAudio failed:', err);
+    }
+    if (audioRef.current?.paused) void playAudio(audioRef.current);
+  }, [playAudio]);
+
+  const flushPending = useCallback(() => {
+    const sourceBuffer = sourceBufferRef.current;
+    if (!sourceBuffer || sourceBuffer.updating || pendingRef.current.length === 0) return;
+
+    const chunk = pendingRef.current.shift()!;
+    const buffer = chunk.buffer.slice(chunk.byteOffset, chunk.byteOffset + chunk.byteLength) as ArrayBuffer;
+    try {
+      sourceBuffer.appendBuffer(buffer);
+    } catch (err) {
+      console.warn('[voice] appendBuffer failed:', err);
+      streamingRef.current = false;
+      pendingRef.current.unshift(chunk);
+    }
+  }, []);
+
+  const initStreaming = useCallback((mimeType: string) => {
+    if (streamingRef.current || typeof MediaSource === 'undefined') return;
+
+    const msMime = getMediaSourceMimeType(mimeType);
+    if (!msMime) {
+      console.warn('[voice] MediaSource unsupported for', mimeType);
+      return;
+    }
+
+    cleanupMediaSource();
+    streamingRef.current = true;
+
+    const mediaSource = new MediaSource();
+    mediaSourceRef.current = mediaSource;
+    const objectUrl = URL.createObjectURL(mediaSource);
+    objectUrlRef.current = objectUrl;
+
+    const audio = new Audio();
+    audioRef.current = audio;
+    audio.src = objectUrl;
+
+    mediaSource.addEventListener('sourceopen', () => {
+      try {
+        const sourceBuffer = mediaSource.addSourceBuffer(msMime);
+        sourceBufferRef.current = sourceBuffer;
+        sourceBuffer.mode = 'sequence';
+        sourceBuffer.addEventListener('updateend', flushPending);
+        flushPending();
+        void playAudio(audio);
+      } catch (err) {
+        console.warn('[voice] MediaSource init failed:', err);
+        streamingRef.current = false;
+      }
+    }, { once: true });
+  }, [cleanupMediaSource, flushPending, playAudio]);
 
   const enqueueChunk = useCallback((base64: string) => {
-    const bytes = base64ToBytes(base64);
+    let bytes: Uint8Array;
+    try {
+      bytes = base64ToBytes(base64);
+    } catch (err) {
+      console.warn('[voice] invalid base64 chunk:', err);
+      return;
+    }
+    if (bytes.length === 0) return;
+
     if (chunksRef.current.length === 0) {
       mimeTypeRef.current = detectAudioMimeType(bytes);
+      initStreaming(mimeTypeRef.current);
     }
+
     chunksRef.current.push(bytes);
-    void tryDecodeAndPlay();
-  }, [tryDecodeAndPlay]);
+    if (streamingRef.current) {
+      pendingRef.current.push(bytes);
+      flushPending();
+    }
+  }, [flushPending, initStreaming]);
+
+  const playBlobFallback = useCallback(async () => {
+    if (chunksRef.current.length === 0 || playedRef.current) return;
+
+    cleanupMediaSource();
+    const blob = new Blob(chunksRef.current as BlobPart[], { type: mimeTypeRef.current });
+    const objectUrl = URL.createObjectURL(blob);
+    objectUrlRef.current = objectUrl;
+
+    const audio = new Audio(objectUrl);
+    audioRef.current = audio;
+    audio.addEventListener('ended', () => {
+      URL.revokeObjectURL(objectUrl);
+      if (objectUrlRef.current === objectUrl) objectUrlRef.current = null;
+      audioRef.current = null;
+    }, { once: true });
+
+    try {
+      await audio.play();
+      playedRef.current = true;
+    } catch (err) {
+      console.warn('[voice] blob fallback play failed:', err);
+      URL.revokeObjectURL(objectUrl);
+      objectUrlRef.current = null;
+      audioRef.current = null;
+    }
+  }, [cleanupMediaSource]);
+
+  const finalize = useCallback(() => {
+    if (streamingRef.current && mediaSourceRef.current?.readyState === 'open' && sourceBufferRef.current) {
+      const waitForQueue = () => {
+        const sourceBuffer = sourceBufferRef.current;
+        if (!sourceBuffer || sourceBuffer.updating || pendingRef.current.length > 0) {
+          window.setTimeout(waitForQueue, 50);
+          return;
+        }
+        try {
+          mediaSourceRef.current?.endOfStream();
+        } catch (err) {
+          console.warn('[voice] endOfStream on finalize failed:', err);
+          void playBlobFallback();
+        }
+      };
+      waitForQueue();
+      return;
+    }
+    void playBlobFallback();
+  }, [playBlobFallback]);
 
   const reset = useCallback(() => {
     chunksRef.current = [];
     mimeTypeRef.current = 'audio/webm';
-    playedDurationRef.current = 0;
-    nextPlayTimeRef.current = 0;
-    decodingRef.current = false;
-    if (audioContextRef.current) {
-      void audioContextRef.current.close();
-      audioContextRef.current = null;
-    }
-  }, []);
+    playedRef.current = false;
+    cleanupMediaSource();
+  }, [cleanupMediaSource]);
 
-  return { enqueueChunk, reset };
+  return { enqueueChunk, finalize, reset, unlockAudio };
 };
 
 const getSupportedRecorderMimeType = (): string | undefined => {
@@ -164,8 +299,8 @@ export const usePushToTalk = (
       };
       recorder.start(RECORDER_TIMESLICE_MS);
       setIsRecording(true);
-    } catch {
-      /* mic denied */
+    } catch (err) {
+      console.warn('[voice] microphone access denied:', err);
     }
   }, [onStart, onChunk]);
 

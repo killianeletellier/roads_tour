@@ -124,8 +124,9 @@ export const setupSocketIO = (httpServer: HttpServer) => {
       socket.to(room).emit('voice:start', { memberId });
     });
 
-    socket.on('voice:chunk', (payload: { data: string }) => {
+    socket.on('voice:chunk', (payload: { data?: string }) => {
       if (socket.role !== 'organizer') return;
+      if (typeof payload?.data !== 'string' || payload.data.length === 0) return;
       const state = getRoomState(convoyId);
       if (state.voiceActiveMemberId !== memberId) return;
       socket.to(room).emit('voice:chunk', { memberId, data: payload.data });

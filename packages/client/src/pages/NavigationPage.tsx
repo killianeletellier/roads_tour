@@ -48,7 +48,7 @@ export const NavigationPage = () => {
   }, []);
 
   const { location, heading, speed } = useGeolocation();
-  const { enqueueChunk, reset: resetVoice } = useVoicePlayback();
+  const { enqueueChunk, finalize: finalizeVoice, reset: resetVoice, unlockAudio } = useVoicePlayback();
 
   const onOffRoute = useCallback((event: OffRouteEvent) => {
     if (session?.role === 'organizer') {
@@ -64,7 +64,7 @@ export const NavigationPage = () => {
         onOffRoute: session.role === 'organizer' ? onOffRoute : undefined,
         onVoiceStart: () => resetVoice(),
         onVoiceChunk: (_id: string, data: string) => enqueueChunk(data),
-        onVoiceEnd: () => {},
+        onVoiceEnd: () => finalizeVoice(),
       }
     : null;
 
@@ -150,6 +150,16 @@ export const NavigationPage = () => {
       setFocusedMemberId(null);
     }
   }, [focusedMemberId, members]);
+
+  useEffect(() => {
+    const unlock = () => { void unlockAudio(); };
+    document.addEventListener('pointerdown', unlock, { once: true, passive: true });
+    document.addEventListener('touchstart', unlock, { once: true, passive: true });
+    return () => {
+      document.removeEventListener('pointerdown', unlock);
+      document.removeEventListener('touchstart', unlock);
+    };
+  }, [unlockAudio]);
 
   const handleSelectParticipant = useCallback((memberId: string) => {
     setFocusedMemberId(memberId);
