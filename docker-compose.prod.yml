@@ -31,7 +31,7 @@ services:
     volumes:
       - osrm-data:/data
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://127.0.0.1:5000/nearest/v1/driving/0,0 >/dev/null || exit 1"]
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/5000' || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 5
