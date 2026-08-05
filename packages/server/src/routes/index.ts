@@ -331,20 +331,63 @@ export async function registerPublicRoutes(app: FastifyInstance) {
   }));
 }
 
+const OSRM_PROXY_TIMEOUT_MS = 30_000;
+
 export async function registerOsrmProxy(app: FastifyInstance) {
-  app.all('/api/osrm/*', async (request, reply) => {
-    const path = (request.params as { '*': string })['*'];
-    const url = `${config.osrmUrl.replace(/\/$/, '')}/${path}${request.url.includes('?') ? '?' + request.url.split('?')[1] : ''}`;
+  app.get('/api/health/osrm', async (_request, reply) => {
+    const probeUrl = `${config.osrmUrl.replace(/\/$/, '')}/nearest/v1/driving/0,0`;
     try {
-      const res = await fetch(url, { method: request.method });
-      const body = await res.text();
+      const res = await fetch(probeUrl, { signal: AbortSignal.timeout(5_000) });
       if (!res.ok) {
-        request.log.warn({ url, status: res.status, body: body.slice(0, 256) }, 'OSRM proxy error');
+        return reply.status(503).send({
+          status: 'degraded',
+          message: `OSRM responded with HTTP ${res.status}`,
+        });
       }
-      reply.status(res.status).header('content-type', res.headers.get('content-type') ?? 'application/json').send(body);
+      return { status: 'ok' };
     } catch (err) {
-      request.log.error({ url, err }, 'OSRM proxy unreachable');
-      reply.status(502).send({ error: 'OSRM unavailable', message: 'Le serveur de routage OSRM est inaccessible. Vérifiez OSRM_URL.' });
+      const cause = err instanceof Error ? err.message : String(err);
+      return reply.status(503).send({
+        status: 'unavailable',
+        message: 'OSRM unreachable from app container',
+        ...(config.nodeEnv !== 'production' ? { detail: cause } : {}),
+      });
+    }
+  });
+
+  app.all('/api/osrm/*', async (request, reply) => {
+    const path = (request.params as { '*': string })['*'] ?? '';
+    const queryIndex = request.url.indexOf('?');
+    const query = queryIndex >= 0 ? request.url.slice(queryIndex) : '';
+    const upstream = `${config.osrmUrl.replace(/\/$/, '')}/${path}${query}`;
+
+    try {
+      const res = await fetch(upstream, {
+        method: request.method,
+        headers: { accept: 'application/json' },
+        signal: AbortSignal.timeout(OSRM_PROXY_TIMEOUT_MS),
+      });
+      const body = await res.text();
+
+      if (!res.ok) {
+        request.log.warn(
+          { upstream, status: res.status, body: body.slice(0, 512) },
+          'OSRM upstream HTTP error',
+        );
+      }
+
+      const contentType = res.headers.get('content-type') ?? 'application/json';
+      return reply.status(res.status).header('content-type', contentType).send(body || '{}');
+    } catch (err) {
+      const cause = err instanceof Error ? err.message : String(err);
+      request.log.error({ upstream, cause, osrmUrl: config.osrmUrl, err }, 'OSRM proxy unreachable');
+      return reply.status(502).type('application/json').send({
+        error: 'OSRM unavailable',
+        code: 'OsrmUnreachable',
+        message:
+          'Le serveur de routage OSRM est inaccessible. Vérifiez que le conteneur osrm tourne et que les fichiers region.osrm sont présents dans le volume osrm-data.',
+        ...(config.nodeEnv !== 'production' ? { detail: cause } : {}),
+      });
     }
   });
 }

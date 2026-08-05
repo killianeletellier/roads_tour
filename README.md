@@ -156,6 +156,40 @@ chmod +x docker/osrm/prepare.sh
 
 Pour une région plus large, télécharger l'extract correspondant sur [Geofabrik](https://download.geofabrik.de/) puis relancer la commande ci-dessus.
 
+Le volume Docker créé s'appelle **`roads-tour_osrm-data`** (nom du projet Compose + nom du volume). Vérifier :
+
+```bash
+docker volume inspect roads-tour_osrm-data
+docker run --rm -v roads-tour_osrm-data:/data alpine:3.20 ls -la /data
+# Attendu : region.osrm, region.osrm.cells, region.osrm.mldgr, etc.
+```
+
+Si le volume est vide, OSRM redémarre en boucle et le proxy renvoie **502** sur `/api/osrm/*`.
+
+### Dépannage OSRM (502)
+
+Sur le VPS :
+
+```bash
+# État des conteneurs
+docker compose -f docker-compose.prod.yml --env-file .env.prod ps
+
+# Logs OSRM (erreur typique : "FATAL: OSRM graph not found")
+docker logs roads-tour-osrm --tail 100
+
+# Santé OSRM depuis le conteneur app (réseau internal)
+docker exec roads-tour-app node -e "fetch('http://osrm:5000/nearest/v1/driving/0,0').then(r=>r.text()).then(console.log).catch(e=>console.error(e.message))"
+
+# Endpoint de diagnostic via nginx
+curl -sf https://${DOMAIN}/api/health/osrm
+```
+
+Corrections courantes :
+
+1. **Données manquantes** — exécuter `./docker/osrm/prepare.sh … --prod` puis `docker compose … up -d osrm`
+2. **Volume incorrect** — le projet Compose doit s'appeler `roads-tour` (`name:` dans `docker-compose.prod.yml`)
+3. **OSRM pas prêt** — l'app attend `service_healthy` ; attendre la fin du healthcheck OSRM (~60 s au premier démarrage)
+
 ### 3. Premier déploiement
 
 ```bash

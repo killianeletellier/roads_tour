@@ -71,12 +71,17 @@ const requestOsrm = async (url: string): Promise<OsrmRouteResponse> => {
     throw new OsrmError(`OSRM inaccessible : ${message}`);
   }
 
+  const raw = await response.text();
   let json: OsrmRouteResponse;
   try {
-    json = (await response.json()) as OsrmRouteResponse;
+    json = JSON.parse(raw) as OsrmRouteResponse;
   } catch {
-    console.error('[OSRM] invalid JSON response:', url, response.status);
-    throw new OsrmError(`Réponse OSRM invalide (${response.status})`, response.status);
+    console.error('[OSRM] invalid JSON response:', url, response.status, raw.slice(0, 200));
+    const hint =
+      response.status === 502
+        ? 'Service de routage indisponible (502). Le conteneur OSRM est peut-être arrêté ou les données cartographiques (region.osrm) manquent.'
+        : `Réponse OSRM invalide (${response.status})`;
+    throw new OsrmError(hint, response.status);
   }
 
   if (!response.ok) {

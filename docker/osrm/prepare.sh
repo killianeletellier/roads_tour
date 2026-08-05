@@ -30,7 +30,11 @@ done
 INPUT="${INPUT:-${DATA_DIR}/region.osm.pbf}"
 COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.prod.yml}"
 ENV_FILE="${ENV_FILE:-.env.prod}"
-PROJECT_NAME="${COMPOSE_PROJECT_NAME:-roads-tour}"
+ROOT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+
+# Match Docker Compose project name (see `name:` in docker-compose.prod.yml)
+COMPOSE_NAME="$(grep -E '^name:' "${ROOT_DIR}/${COMPOSE_FILE}" 2>/dev/null | awk '{print $2}' | tr -d '"' || true)"
+PROJECT_NAME="${COMPOSE_PROJECT_NAME:-${COMPOSE_NAME:-roads-tour}}"
 VOLUME_NAME="${OSRM_VOLUME:-${PROJECT_NAME}_osrm-data}"
 
 if [ ! -f "$INPUT" ]; then
