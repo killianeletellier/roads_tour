@@ -1,8 +1,9 @@
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useState } from 'react';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import type { FeatureCollection, LineString } from 'geojson';
 import type { ConvoyMemberInfo } from '@roads-tour/shared';
+import { CrosshairIcon } from './Icons';
 
 interface MapViewProps {
   routeGeoJSON?: FeatureCollection<LineString> | null;
@@ -95,7 +96,28 @@ export const MapView = ({
   const recalcGeoJSONRef = useRef(recalcGeoJSON);
   routeGeoJSONRef.current = routeGeoJSON;
   recalcGeoJSONRef.current = recalcGeoJSON;
-  const followUser = navigationMode || compact;
+  const autoFollow = navigationMode || compact;
+  const [isFollowingUser, setIsFollowingUser] = useState(autoFollow);
+  const isFollowingUserRef = useRef(isFollowingUser);
+  isFollowingUserRef.current = isFollowingUser;
+
+  useEffect(() => {
+    if (navigationMode) {
+      setIsFollowingUser(true);
+    }
+  }, [navigationMode]);
+
+  const recenterOnUser = useCallback(() => {
+    const map = mapRef.current;
+    if (!map || !userLocation) return;
+    setIsFollowingUser(true);
+    map.easeTo({
+      center: userLocation,
+      zoom: NAV_ZOOM,
+      padding: { top: 48, bottom: bottomPadding, left: 24, right: 24 },
+      duration: 500,
+    });
+  }, [userLocation, bottomPadding]);
 
   const applyGeoJSONSource = useCallback((
     sourceId: 'route' | 'recalc',
@@ -186,6 +208,14 @@ export const MapView = ({
 
     map.on('load', initRouteLayers);
 
+    const onUserMoveStart = (e: maplibregl.MapLibreEvent<MouseEvent | TouchEvent | WheelEvent | undefined>) => {
+      if (navigationMode && e.originalEvent) {
+        setIsFollowingUser(false);
+      }
+    };
+    map.on('dragstart', onUserMoveStart);
+    map.on('zoomstart', onUserMoveStart);
+
     const ro = typeof ResizeObserver !== 'undefined'
       ? new ResizeObserver(() => map.resize())
       : null;
@@ -193,6 +223,8 @@ export const MapView = ({
 
     return () => {
       ro?.disconnect();
+      map.off('dragstart', onUserMoveStart);
+      map.off('zoomstart', onUserMoveStart);
       mapReadyRef.current = false;
       map.remove();
       mapRef.current = null;
@@ -286,7 +318,7 @@ export const MapView = ({
       }
     }
 
-    if (followUser) {
+    if (isFollowingUserRef.current && autoFollow) {
       map.easeTo({
         center: userLocation,
         zoom: navigationMode ? NAV_ZOOM : map.getZoom(),
@@ -294,7 +326,7 @@ export const MapView = ({
         duration: 500,
       });
     }
-  }, [userLocation, userHeading, followUser, navigationMode, bottomPadding]);
+  }, [userLocation, userHeading, autoFollow, navigationMode, bottomPadding]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -325,7 +357,7 @@ export const MapView = ({
 
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || followUser || !routeGeoJSON?.features.length) return;
+    if (!map || autoFollow || !routeGeoJSON?.features.length) return;
     const allCoords = routeGeoJSON.features.flatMap(f => f.geometry.coordinates);
     if (allCoords.length < 2) return;
     const bounds = allCoords.reduce(
@@ -334,7 +366,7 @@ export const MapView = ({
     );
     for (const p of pois) bounds.extend([p.lon, p.lat]);
     map.fitBounds(bounds, { padding: 48, maxZoom: 14 });
-  }, [routeGeoJSON, pois, followUser]);
+  }, [routeGeoJSON, pois, autoFollow]);
 
   const heightStyle = navigationMode
     ? { height: '100%', minHeight: 0 }
@@ -344,14 +376,30 @@ export const MapView = ({
 
   return (
     <div
-      ref={containerRef}
-      className={`${navigationMode ? 'map-view--navigation' : ''} ${className}`.trim()}
+      className={`map-view ${navigationMode ? 'map-view--navigation' : ''} ${className}`.trim()}
       style={{
+        position: 'relative',
         width: '100%',
         borderRadius: navigationMode ? 0 : 8,
         overflow: 'hidden',
         ...heightStyle,
       }}
-    />
+    >
+      <div
+        ref={containerRef}
+        style={{ width: '100%', height: '100%' }}
+      />
+      {navigationMode && !isFollowingUser && userLocation && (
+        <button
+          type="button"
+          className="map-view__recenter btn-icon no-select"
+          style={{ bottom: `calc(${bottomPadding + 16}px + env(safe-area-inset-bottom, 0px))` }}
+          onClick={recenterOnUser}
+          aria-label="Recentrer sur ma position"
+        >
+          <CrosshairIcon />
+        </button>
+      )}
+    </div>
   );
 };

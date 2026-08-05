@@ -102,6 +102,30 @@ export const NavigationPage = () => {
 
   const ptt = usePushToTalk(voiceStart, voiceChunk, voiceEnd);
 
+  const handlePttPointerDown = useCallback((e: React.PointerEvent<HTMLButtonElement>) => {
+    e.preventDefault();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    ptt.start();
+  }, [ptt]);
+
+  const handlePttPointerUp = useCallback((e: React.PointerEvent<HTMLButtonElement>) => {
+    e.preventDefault();
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    }
+    ptt.stop();
+  }, [ptt]);
+
+  const handlePttPointerLeave = useCallback((e: React.PointerEvent<HTMLButtonElement>) => {
+    if (ptt.isRecording) {
+      handlePttPointerUp(e);
+    }
+  }, [ptt, handlePttPointerUp]);
+
+  const blockTouchDefault = useCallback((e: React.SyntheticEvent) => {
+    e.preventDefault();
+  }, []);
+
   const pois = useMemo(
     () => nav.sortedPoints.map((p, i) => ({ lat: p.latitude, lon: p.longitude, label: p.label, order: i + 1 })),
     [nav.sortedPoints],
@@ -157,10 +181,12 @@ export const NavigationPage = () => {
               <UsersIcon />
             </button>
             <button
-              className={`btn-icon nav-page__ptt ${ptt.isRecording ? 'nav-page__ptt--active' : ''}`}
-              onPointerDown={() => ptt.start()}
-              onPointerUp={() => ptt.stop()}
-              onPointerLeave={() => ptt.isRecording && ptt.stop()}
+              className={`btn-icon nav-page__ptt no-select ${ptt.isRecording ? 'nav-page__ptt--active' : ''}`}
+              onPointerDown={handlePttPointerDown}
+              onPointerUp={handlePttPointerUp}
+              onPointerLeave={handlePttPointerLeave}
+              onPointerCancel={handlePttPointerUp}
+              onContextMenu={blockTouchDefault}
               aria-label="Push-to-talk"
             >
               <MicIcon />

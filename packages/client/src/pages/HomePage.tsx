@@ -26,12 +26,17 @@ export const HomePage = () => {
     }
   };
 
-  const startLongPress = useCallback(() => {
+  const startLongPress = useCallback((e: React.PointerEvent) => {
+    e.preventDefault();
     longPressTimer.current = setTimeout(() => setShowOrganizer(true), 2000);
   }, []);
 
   const cancelLongPress = useCallback(() => {
     if (longPressTimer.current) clearTimeout(longPressTimer.current);
+  }, []);
+
+  const blockContextMenu = useCallback((e: React.SyntheticEvent) => {
+    e.preventDefault();
   }, []);
 
   const openOrganizer = () => {
@@ -43,10 +48,12 @@ export const HomePage = () => {
     <div className="app-shell" style={{ padding: '2rem 1.5rem', alignItems: 'center', justifyContent: 'center' }}>
       <div style={{ width: '100%', maxWidth: 360, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2rem' }}>
         <div
+          className="home-page__logo-trigger no-select"
           onPointerDown={startLongPress}
           onPointerUp={cancelLongPress}
           onPointerLeave={cancelLongPress}
-          style={{ cursor: 'default', userSelect: 'none' }}
+          onPointerCancel={cancelLongPress}
+          onContextMenu={blockContextMenu}
         >
           <Logo size={64} />
         </div>

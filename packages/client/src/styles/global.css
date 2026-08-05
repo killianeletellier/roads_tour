@@ -81,6 +81,26 @@ input, select {
   border-color: var(--accent);
 }
 
+.no-select,
+.no-select * {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.no-select {
+  touch-action: manipulation;
+}
+
+.no-select svg {
+  pointer-events: none;
+}
+
+.home-page__logo-trigger {
+  cursor: default;
+  display: inline-flex;
+}
+
 .input {
   width: 100%;
   padding: 0.875rem 1rem;
@@ -285,6 +305,20 @@ input, select {
   inset: 0;
 }
 
+.map-view__recenter {
+  position: absolute;
+  right: calc(0.75rem + env(safe-area-inset-right, 0px));
+  z-index: 5;
+  background: #D14F8B;
+  color: white;
+  border-color: #D14F8B;
+  box-shadow: 0 2px 12px rgba(209, 79, 139, 0.45);
+}
+
+.map-view__recenter:active {
+  transform: scale(0.96);
+}
+
 .nav-page__close {
   position: absolute;
   top: calc(0.75rem + env(safe-area-inset-top, 0px));
@@ -458,6 +492,8 @@ input, select {
   background: rgba(255, 255, 255, 0.96);
   backdrop-filter: blur(8px);
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .nav-page__ptt--active {
