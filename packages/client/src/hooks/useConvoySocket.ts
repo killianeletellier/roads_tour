@@ -6,6 +6,7 @@ import { isConnectedMember } from '../utils/participants';
 interface UseConvoySocketOptions {
   token: string;
   memberId: string;
+  displayName: string;
   role: 'participant' | 'organizer';
   onOffRoute?: (event: OffRouteEvent) => void;
   onVoiceStart?: (memberId: string) => void;
@@ -27,8 +28,8 @@ export const useConvoySocket = (options: UseConvoySocketOptions | null) => {
 
   useEffect(() => {
     if (!options) return;
-    const { token, memberId } = options;
-    const socket = io({ path: '/socket.io', auth: { token } });
+    const { token, memberId, displayName } = options;
+    const socket = io({ path: '/socket.io', auth: { token, displayName } });
     socketRef.current = socket;
 
     socket.on('connect', () => {

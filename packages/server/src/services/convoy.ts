@@ -1,6 +1,15 @@
+import { randomUUID } from 'node:crypto';
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import type { Convoy, Segment, POI, ConvoyMember } from '@prisma/client';
 import type { ConvoyRoute, ConvoyDetail, ConvoySummary, ConvoyMemberInfo } from '@roads-tour/shared';
+
+export const OFFLINE_DISPLAY_NAME_PREFIX = '_offline_';
+
+export const isAnonymizedDisplayName = (name: string): boolean =>
+  name.startsWith(OFFLINE_DISPLAY_NAME_PREFIX);
+
+export const generateAnonymizedDisplayName = (): string =>
+  `${OFFLINE_DISPLAY_NAME_PREFIX}${randomUUID().replace(/-/g, '').slice(0, 8)}`;
 
 type SegmentWithPoi = Segment & { poi: POI | null };
 

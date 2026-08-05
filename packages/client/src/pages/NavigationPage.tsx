@@ -60,6 +60,7 @@ export const NavigationPage = () => {
     ? {
         token: session.token,
         memberId: session.memberId,
+        displayName: session.displayName,
         role: session.role,
         onOffRoute: session.role === 'organizer' ? onOffRoute : undefined,
         onVoiceStart: () => resetVoice(),

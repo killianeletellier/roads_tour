@@ -11,6 +11,7 @@ import {
   toConvoyRoute,
   requireAdmin,
   generateAccessCode,
+  isAnonymizedDisplayName,
 } from '../services/convoy.js';
 
 const createConvoySchema = z.object({
@@ -303,11 +304,23 @@ export async function registerPublicRoutes(app: FastifyInstance) {
       if (!valid) return reply.status(401).send({ error: 'Invalid password' });
     }
 
+    const displayName = body.displayName.trim();
+    if (isAnonymizedDisplayName(displayName)) {
+      return reply.status(400).send({ error: 'Invalid display name' });
+    }
+
+    const taken = await prisma.convoyMember.findFirst({
+      where: { convoyId: id, displayName },
+    });
+    if (taken && !isAnonymizedDisplayName(taken.displayName)) {
+      return reply.status(409).send({ error: 'Display name already taken' });
+    }
+
     try {
       const member = await prisma.convoyMember.create({
         data: {
           convoyId: id,
-          displayName: body.displayName,
+          displayName,
           role: body.role,
           organizerRole: body.role === 'organizer' ? (body.organizerRole ?? 'lead') : null,
         },

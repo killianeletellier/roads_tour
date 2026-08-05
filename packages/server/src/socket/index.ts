@@ -3,7 +3,11 @@ import { Server, type Socket } from 'socket.io';
 import type { PositionUpdate, OffRouteEvent } from '@roads-tour/shared';
 import { CONNECTED_THRESHOLD_MS } from '@roads-tour/shared';
 import { prisma } from '../db.js';
-import { toMemberInfo } from '../services/convoy.js';
+import {
+  toMemberInfo,
+  isAnonymizedDisplayName,
+  generateAnonymizedDisplayName,
+} from '../services/convoy.js';
 
 interface ConvoyRoomState {
   positionsVisible: boolean;
@@ -75,12 +79,39 @@ export const setupSocketIO = (httpServer: HttpServer) => {
     const room = `convoy:${convoyId}`;
     socket.join(room);
 
-    void clearMemberPosition(memberId).then(() => {
-      prisma.convoyMember.update({
+    const authDisplayName = typeof socket.handshake.auth.displayName === 'string'
+      ? socket.handshake.auth.displayName.trim()
+      : '';
+
+    void (async () => {
+      await clearMemberPosition(memberId);
+      const member = await prisma.convoyMember.findUnique({ where: { id: memberId } });
+      if (
+        member
+        && isAnonymizedDisplayName(member.displayName)
+        && authDisplayName
+        && !isAnonymizedDisplayName(authDisplayName)
+      ) {
+        const conflict = await prisma.convoyMember.findFirst({
+          where: {
+            convoyId,
+            displayName: authDisplayName,
+            id: { not: memberId },
+          },
+        });
+        if (!conflict) {
+          await prisma.convoyMember.update({
+            where: { id: memberId },
+            data: { displayName: authDisplayName, lastSeen: new Date() },
+          });
+          return;
+        }
+      }
+      await prisma.convoyMember.update({
         where: { id: memberId },
         data: { lastSeen: new Date() },
       }).catch(() => {});
-    });
+    })();
 
     const state = getRoomState(convoyId);
     socket.emit('positions:toggle', { visible: state.positionsVisible });
@@ -192,7 +223,17 @@ export const setupSocketIO = (httpServer: HttpServer) => {
         state.voiceActiveMemberId = null;
         socket.to(room).emit('voice:end', { memberId });
       }
-      await clearMemberPosition(memberId);
+      await prisma.convoyMember.update({
+        where: { id: memberId },
+        data: {
+          displayName: generateAnonymizedDisplayName(),
+          lat: null,
+          lon: null,
+          heading: null,
+          speed: null,
+          isOffRoute: false,
+        },
+      });
       socket.to(room).emit('member:offline', { memberId });
     });
   });
