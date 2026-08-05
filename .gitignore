@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.env
+.env.prod
+.env.local
+*.log
+.DS_Store
+packages/server/prisma/migrations/**/migration_lock.toml
+!packages/server/prisma/migrations/migration_lock.toml
+docker/osrm/data/
+*.osrm*
+*.osm.pbf

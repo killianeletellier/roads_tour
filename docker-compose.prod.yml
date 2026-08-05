@@ -1,0 +1,122 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: roads-tour-postgres
+    restart: unless-stopped
+    env_file: .env.prod
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - internal
+
+  osrm:
+    image: osrm/osrm-backend
+    container_name: roads-tour-osrm
+    restart: unless-stopped
+    command: osrm-routed --algorithm mld /data/region.osrm
+    volumes:
+      - osrm-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:5000/nearest/v1/driving/0,0 >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    networks:
+      - internal
+
+  app:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    container_name: roads-tour-app
+    restart: unless-stopped
+    env_file: .env.prod
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      HOST: 0.0.0.0
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      OSRM_URL: http://osrm:5000
+      CLIENT_DIST: ../../client/dist
+      JWT_SECRET: ${JWT_SECRET}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      osrm:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 90s
+    networks:
+      - internal
+      - frontend
+
+  nginx:
+    image: nginx:alpine
+    container_name: roads-tour-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN}
+    volumes:
+      - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./docker/nginx/templates:/etc/nginx/templates:ro
+      - ./docker/nginx/entrypoint.sh:/entrypoint.sh:ro
+      - certbot-www:/var/www/certbot:ro
+      - certbot-certs:/etc/letsencrypt:ro
+    entrypoint: ["/bin/sh", "/entrypoint.sh"]
+    depends_on:
+      app:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/api/health >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    networks:
+      - frontend
+
+  certbot:
+    image: certbot/certbot:latest
+    container_name: roads-tour-certbot
+    restart: unless-stopped
+    volumes:
+      - certbot-www:/var/www/certbot
+      - certbot-certs:/etc/letsencrypt
+    entrypoint: /bin/sh -c "trap exit TERM; while :; do certbot renew --quiet; sleep 12h & wait $${!}; done"
+    depends_on:
+      nginx:
+        condition: service_started
+    networks:
+      - frontend
+
+volumes:
+  pgdata:
+  osrm-data:
+  certbot-www:
+  certbot-certs:
+
+networks:
+  internal:
+    driver: bridge
+    internal: true
+  frontend:
+    driver: bridge

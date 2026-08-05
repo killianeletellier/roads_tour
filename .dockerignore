@@ -1,0 +1,36 @@
+# Dependencies & build output
+node_modules
+**/node_modules
+**/dist
+**/.vite
+
+# Environment & secrets
+.env
+.env.*
+!.env.example
+!.env.prod.example
+
+# Git & IDE
+.git
+.gitignore
+.cursor
+.vscode
+*.swp
+*.swo
+
+# OSRM raw data (large; prepare separately)
+docker/osrm/data
+*.osm.pbf
+
+# Docs & plans
+*.md
+!README.md
+
+# Dev compose & local tooling
+docker-compose.yml
+
+# Tests & misc
+**/*.test.ts
+**/*.spec.ts
+coverage
+.DS_Store

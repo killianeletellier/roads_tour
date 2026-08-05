@@ -1,0 +1,18 @@
+{
+  "name": "roads-tour",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace=@roads-tour/server & npm run dev --workspace=@roads-tour/client",
+    "dev:server": "npm run dev --workspace=@roads-tour/server",
+    "dev:client": "npm run dev --workspace=@roads-tour/client",
+    "build": "npm run build --workspace=@roads-tour/shared && npm run build --workspace=@roads-tour/client && npm run build --workspace=@roads-tour/server",
+    "db:migrate": "npm run db:migrate --workspace=@roads-tour/server",
+    "db:generate": "npm run db:generate --workspace=@roads-tour/server"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

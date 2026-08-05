@@ -1,0 +1,32 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: roads-tour-postgres
+    environment:
+      POSTGRES_USER: roadstour
+      POSTGRES_PASSWORD: roadstour
+      POSTGRES_DB: roadstour
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U roadstour -d roadstour"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  osrm:
+    image: osrm/osrm-backend
+    container_name: roads-tour-osrm
+    command: osrm-routed --algorithm mld /data/region.osrm
+    ports:
+      - "5000:5000"
+    volumes:
+      - osrm-data:/data
+    profiles:
+      - osrm
+
+volumes:
+  pgdata:
+  osrm-data:

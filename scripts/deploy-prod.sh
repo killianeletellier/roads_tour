@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+# Production deployment helper for Roads Tour.
+#
+# Usage:
+#   chmod +x scripts/deploy-prod.sh
+#   ./scripts/deploy-prod.sh          # full stack
+#   ./scripts/deploy-prod.sh app      # rebuild app only
+
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$ROOT_DIR"
+
+COMPOSE="docker compose -f docker-compose.prod.yml --env-file .env.prod"
+
+if [ ! -f .env.prod ]; then
+  echo "Error: .env.prod not found."
+  echo "  cp .env.prod.example .env.prod"
+  echo "  # edit passwords, JWT_SECRET, DOMAIN, CERTBOT_EMAIL"
+  exit 1
+fi
+
+# shellcheck disable=SC1091
+set -a
+source .env.prod
+set +a
+
+if [ "${ADMIN_PASSWORD:-}" = "change-me-admin-password" ] || [ "${JWT_SECRET:-}" = "change-me-jwt-secret-min-32-chars" ]; then
+  echo "Warning: ADMIN_PASSWORD or JWT_SECRET still use placeholder values."
+fi
+
+SERVICE="${1:-}"
+
+if [ -n "$SERVICE" ]; then
+  echo "==> Building and starting: $SERVICE"
+  $COMPOSE up -d --build "$SERVICE"
+else
+  echo "==> Building and starting full production stack"
+  $COMPOSE up -d --build
+fi
+
+echo ""
+echo "Stack status:"
+$COMPOSE ps
+
+echo ""
+echo "Health:"
+echo "  curl -sf http://localhost/api/health   # before HTTPS"
+echo "  curl -sf https://${DOMAIN:-your-domain}/api/health"

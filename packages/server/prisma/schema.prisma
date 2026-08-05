@@ -1,0 +1,81 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ConvoyStatus {
+  draft
+  ready
+  active
+  archived
+}
+
+enum MemberRole {
+  participant
+  organizer
+}
+
+enum OrganizerRole {
+  lead
+  sweep
+  door
+}
+
+model Convoy {
+  id                String       @id @default(uuid())
+  name              String
+  accessCode        String       @unique
+  adminPasswordHash String
+  status            ConvoyStatus @default(draft)
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+  segments          Segment[]
+  members           ConvoyMember[]
+}
+
+model Segment {
+  id          String @id @default(uuid())
+  convoyId    String
+  order       Int
+  name        String @default("")
+  geometry    Json
+  lengthM     Float
+  durationMin Float
+  convoy      Convoy @relation(fields: [convoyId], references: [id], onDelete: Cascade)
+  poi         POI?
+
+  @@index([convoyId])
+}
+
+model POI {
+  id        String  @id @default(uuid())
+  segmentId String  @unique
+  lat       Float
+  lon       Float
+  label     String
+  segment   Segment @relation(fields: [segmentId], references: [id], onDelete: Cascade)
+}
+
+model ConvoyMember {
+  id             String         @id @default(uuid())
+  convoyId       String
+  displayName    String
+  role           MemberRole     @default(participant)
+  organizerRole  OrganizerRole?
+  sessionToken   String         @unique @default(uuid())
+  lat            Float?
+  lon            Float?
+  heading        Float?
+  speed          Float?
+  isOffRoute     Boolean        @default(false)
+  lastSeen       DateTime?
+  createdAt      DateTime       @default(now())
+  convoy         Convoy         @relation(fields: [convoyId], references: [id], onDelete: Cascade)
+
+  @@unique([convoyId, displayName])
+  @@index([convoyId])
+}
