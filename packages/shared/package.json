@@ -16,7 +16,7 @@
     "dev": "tsc -b --watch"
   },
   "dependencies": {
-    "fast-xml-parser": "^4.5.1",
+    "fast-xml-parser": "^5.10.1",
     "geojson": "^0.5.0"
   },
   "peerDependencies": {
