@@ -10,13 +10,14 @@ import {
   isAnonymizedDisplayName,
   generateAnonymizedDisplayName,
 } from '../services/convoy.js';
+import { config } from '../config.js';
 
 interface ConvoyRoomState {
   positionsVisible: boolean;
   voiceActiveMemberId: string | null;
 }
 
-const pubClient = new Redis();
+const pubClient = new Redis(config.redisUrl);
 const subClient = pubClient.duplicate();
 
 const roomStates = new Map<string, ConvoyRoomState>();
