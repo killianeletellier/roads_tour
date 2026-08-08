@@ -57,7 +57,7 @@ export const HomePage = () => {
         >
           <Logo size={64} />
         </div>
-        <h1 style={{ fontSize: '1.5rem', fontWeight: 700 }}>Roads Tour</h1>
+        <h1 style={{ fontSize: '1.5rem', fontWeight: 700 }}>C15 Tour Festival</h1>
 
         <form onSubmit={join} style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
           <input
@@ -75,6 +75,8 @@ export const HomePage = () => {
           </button>
         </form>
       </div>
+
+      <div style={{position: "fixed", bottom: "8px", left: "50%", translate: "-50% 0", fontSize: "0.8rem", color: "#4a4a4a" }}>Roads Tour, développé par l'équipe du C15 Tour Festival et hébergé par Bunn</div>
 
       {showOrganizer && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>

@@ -1,9 +1,7 @@
 export const Logo = ({ size = 32 }: { size?: number }) => (
-  <svg width={size} height={size} viewBox="0 0 64 64" fill="none" aria-hidden>
-    <rect width="64" height="64" rx="12" fill="#D14F8B" />
-    <path d="M16 40 L32 16 L48 40" stroke="white" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" fill="none" />
-    <circle cx="32" cy="44" r="4" fill="white" />
-  </svg>
+  <div style={{background: "#D14F8B", borderRadius: "8px", width: size, height: size, display: "flex", justifyContent: "center", alignItems: "center"}}>
+    <img src="/logo.png" width={size*0.9} height={size*0.9} />
+  </div>
 );
 
 export const ManeuverIcon = ({ type, modifier }: { type: string; modifier?: string }) => {
