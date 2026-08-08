@@ -44,17 +44,22 @@ const isRecentlySeen = (lastSeen: Date | null): boolean => {
   return Date.now() - lastSeen.getTime() < CONNECTED_THRESHOLD_MS;
 };
 
-const clearMemberPosition = (memberId: string) =>
-  prisma.convoyMember.update({
-    where: { id: memberId },
-    data: {
-      lat: null,
-      lon: null,
-      heading: null,
-      speed: null,
-      isOffRoute: false,
-    },
-  });
+const clearMemberPosition = (memberId: string) => {
+  try {
+    prisma.convoyMember.update({
+      where: { id: memberId },
+      data: {
+        lat: null,
+        lon: null,
+        heading: null,
+        speed: null,
+        isOffRoute: false,
+      },
+    });
+  } catch (e) {
+
+  }
+}
 
 interface AuthenticatedSocket extends Socket {
   memberId?: string;
@@ -129,15 +134,25 @@ export const setupSocketIO = (httpServer: HttpServer) => {
 
     socket.on('position:update', async (payload: PositionUpdate) => {
       if (payload.memberId !== memberId) return;
-      await prisma.convoyMember.update({
+      await prisma.convoyMember.upsert({
         where: { id: memberId },
-        data: {
+        update: {
           lat: payload.lat,
           lon: payload.lon,
           heading: payload.heading ?? null,
           speed: payload.speed ?? null,
           lastSeen: new Date(),
         },
+        create: {
+          id: memberId, convoyId,
+          role: "participant",
+          organizerRole: null,
+          lat: payload.lat,
+          lon: payload.lon,
+          heading: payload.heading ?? null,
+          speed: payload.speed ?? null,
+          lastSeen: new Date(),
+        }
       });
 
       const roomState = getRoomState(convoyId);
@@ -166,7 +181,7 @@ export const setupSocketIO = (httpServer: HttpServer) => {
       await prisma.convoyMember.update({
         where: { id: memberId },
         data: { isOffRoute: true },
-      });
+      }).catch(() => {});
       const sockets = await io.in(room).fetchSockets();
       for (const s of sockets) {
         const ts = s as unknown as AuthenticatedSocket;
@@ -244,7 +259,7 @@ export const setupSocketIO = (httpServer: HttpServer) => {
           speed: null,
           isOffRoute: false,
         },
-      });
+      }).catch(() => {});
       socket.to(room).emit('member:offline', { memberId });
     });
   });
