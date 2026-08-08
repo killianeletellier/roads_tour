@@ -107,9 +107,13 @@ export const setupSocketIO = (httpServer: HttpServer) => {
           },
         });
         if (!conflict) {
-          await prisma.convoyMember.update({
+          await prisma.convoyMember.upsert({
             where: { id: memberId },
-            data: { displayName: authDisplayName, lastSeen: new Date() },
+            update: { displayName: authDisplayName, lastSeen: new Date() },
+            create: { id: memberId, convoyId,
+            displayName: authDisplayName,
+            role: "participant",
+            organizerRole: null }
           });
           return;
         }
