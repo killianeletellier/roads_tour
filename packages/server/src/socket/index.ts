@@ -84,6 +84,7 @@ export const setupSocketIO = (httpServer: HttpServer) => {
     if (!member) {
       await prisma.convoyMember.create({
         data: {
+          id: socket.memberId,
           convoyId: socket.convoyId,
           displayName: "unknown-name",
           role: socket.role,
@@ -142,7 +143,7 @@ export const setupSocketIO = (httpServer: HttpServer) => {
     socket.emit('positions:toggle', { visible: state.positionsVisible });
 
     socket.on('position:update', async (payload: PositionUpdate) => {
-      if (payload.memberId !== memberId) return;
+      //if (payload.memberId !== memberId) return;
       await prisma.convoyMember.upsert({
         where: { id: memberId },
         update: {
