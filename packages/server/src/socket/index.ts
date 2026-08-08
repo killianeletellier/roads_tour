@@ -147,6 +147,7 @@ export const setupSocketIO = (httpServer: HttpServer) => {
           id: memberId, convoyId,
           role: "participant",
           organizerRole: null,
+          displayName: memberId,
           lat: payload.lat,
           lon: payload.lon,
           heading: payload.heading ?? null,
