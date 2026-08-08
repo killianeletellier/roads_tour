@@ -27,7 +27,7 @@ const buildApp = async () => {
   });
 
   // Register health early so Docker/nginx probes succeed even if later setup is slow.
-  app.get('/api/health', async () => ({ status: 'ok' }));
+  app.get('/api/health', async () => ({ status: 'ok', node: config.nodeName }));
 
   await app.register(cors, { origin: true, credentials: true });
   await app.register(cookie);
