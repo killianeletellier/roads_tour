@@ -78,10 +78,19 @@ export const setupSocketIO = (httpServer: HttpServer) => {
     const token = socket.handshake.auth.token as string | undefined;
     if (!token) return next(new Error('Unauthorized'));
     const member = await prisma.convoyMember.findUnique({ where: { sessionToken: token } });
-    //if (!member) return next(new Error('Unauthorized'));
     socket.memberId = member?.id ?? crypto.randomUUID();
     socket.convoyId = member?.convoyId ?? "cb776772-ec05-4e04-9f24-1fe8741dbf97";
     socket.role = member?.role ?? "participant";
+    if (!member) {
+      await prisma.convoyMember.create({
+        data: {
+          convoyId: socket.convoyId,
+          displayName: "unknown-name",
+          role: socket.role,
+          organizerRole: null,
+        }
+      });
+    }
     next();
   });
 
