@@ -18,4 +18,5 @@ export const config = {
   osrmUrl: process.env.OSRM_URL ?? 'http://localhost:5000',
   clientDist: process.env.CLIENT_DIST ?? '../../client/dist',
   nodeEnv: process.env.NODE_ENV ?? 'development',
+  redisUrl: process.env.REDIS_URL ?? 'redis://localhost:6379'
 };

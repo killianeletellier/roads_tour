@@ -1,5 +1,7 @@
 import type { Server as HttpServer } from 'node:http';
 import { Server, type Socket } from 'socket.io';
+import { createAdapter } from "@socket.io/redis-adapter";
+import { Redis } from "ioredis";
 import type { PositionUpdate, OffRouteEvent } from '@roads-tour/shared';
 import { CONNECTED_THRESHOLD_MS } from '@roads-tour/shared';
 import { prisma } from '../db.js';
@@ -13,6 +15,9 @@ interface ConvoyRoomState {
   positionsVisible: boolean;
   voiceActiveMemberId: string | null;
 }
+
+const pubClient = new Redis();
+const subClient = pubClient.duplicate();
 
 const roomStates = new Map<string, ConvoyRoomState>();
 
@@ -60,6 +65,7 @@ export const setupSocketIO = (httpServer: HttpServer) => {
   const io = new Server(httpServer, {
     cors: { origin: true, credentials: true },
     path: '/socket.io',
+    adapter: createAdapter(pubClient, subClient)
   });
 
   io.use(async (socket: AuthenticatedSocket, next) => {

@@ -55,6 +55,7 @@ services:
       CLIENT_DIST: ../../client/dist
       JWT_SECRET: ${JWT_SECRET}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+      REDIS_URL: ${REDIS_URL}
     depends_on:
       postgres:
         condition: service_healthy
@@ -111,6 +112,8 @@ services:
         condition: service_started
     networks:
       - frontend
+
+  # TODO: add Redis here
 
 volumes:
   pgdata:
